@@ -22,16 +22,16 @@ The MVP includes:
 
 ### System Requirements
 
-- **Python**: 3.8 or higher
+- **Python**: 3.12 or higher (recommended)
 - **Operating System**: macOS, Linux, or Windows
 - **Disk Space**: 100MB minimum
 - **Memory**: 512MB minimum
 
 ### Required Tools
 
-1. **Python 3.8+**
+1. **Python 3.12+**
    ```bash
-   python3 --version  # Should show 3.8 or higher
+   python3 --version  # Should show 3.12 or higher
    ```
 
 2. **pip** (Python package manager)

@@ -1,8 +1,7 @@
 # Content Creation Engine
 
 [![CI/CD Pipeline](https://github.com/zoopster/content-creation-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/zoopster/content-creation-engine/actions/workflows/ci.yml)
-[![Release](https://github.com/zoopster/content-creation-engine/actions/workflows/release.yml/badge.svg)](https://github.com/zoopster/content-creation-engine/actions/workflows/release.yml)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A modular, multi-agent system for orchestrating content production across formats (articles, social posts, presentations, videos, newsletters).

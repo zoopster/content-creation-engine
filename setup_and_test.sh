@@ -48,7 +48,7 @@ print_info "Checking prerequisites..."
 # Check Python
 if ! command_exists python3; then
     print_error "Python 3 is not installed"
-    echo "Please install Python 3.8 or higher from https://www.python.org/"
+    echo "Please install Python 3.12 or higher from https://www.python.org/"
     exit 1
 fi
 
@@ -57,8 +57,8 @@ PYTHON_VERSION=$(python3 --version 2>&1 | awk '{print $2}')
 PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
 PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
 
-if [ "$PYTHON_MAJOR" -lt 3 ] || ([ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -lt 8 ]); then
-    print_error "Python 3.8+ required, found $PYTHON_VERSION"
+if [ "$PYTHON_MAJOR" -lt 3 ] || ([ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -lt 12 ]); then
+    print_error "Python 3.12+ required, found $PYTHON_VERSION"
     exit 1
 fi
 

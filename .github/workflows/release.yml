@@ -1,9 +1,7 @@
 name: Release
 
+# Manual release only - automatic releases disabled
 on:
-  push:
-    tags:
-      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       version:
