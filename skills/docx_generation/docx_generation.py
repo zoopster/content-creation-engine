@@ -385,6 +385,8 @@ class DocxGenerationSkill(Skill):
     def _add_headers_footers(self, doc: Any, header_text: Optional[str],
                             footer_text: Optional[str], page_numbers: bool):
         """Add headers and footers to document."""
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+
         section = doc.sections[0]
 
         # Header
