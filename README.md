@@ -54,13 +54,44 @@ The Content Creation Engine uses specialized agents and skills to automate and e
 
 ## Installation
 
+### Option 1: Automated Setup (Recommended)
+
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/zoopster/content-creation-engine.git
 cd content-creation-engine
 
-# Install dependencies (Python 3.8+)
-pip install -r requirements.txt  # (to be created)
+# Run automated setup script
+# On macOS/Linux:
+./setup_and_test.sh
+
+# On Windows:
+setup_and_test.bat
+```
+
+The setup script will:
+- Check prerequisites (Python 3.8+)
+- Create and activate virtual environment
+- Install all dependencies
+- Run comprehensive MVP tests
+- Validate the installation
+
+### Option 2: Manual Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/zoopster/content-creation-engine.git
+cd content-creation-engine
+
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run MVP test
+python3 mvp_test.py
 ```
 
 ## Quick Start
