@@ -1,0 +1,97 @@
+{
+  "content_brief_template": {
+    "metadata": {
+      "version": "1.0",
+      "created": "2026-01-13",
+      "description": "Standard template for content briefs"
+    },
+    "sections": {
+      "target_audience": {
+        "description": "Who is this content for?",
+        "examples": [
+          "Technical professionals and software engineers",
+          "Business executives and decision-makers",
+          "Marketing professionals",
+          "General consumers interested in [topic]"
+        ],
+        "questions_to_answer": [
+          "What is their role/profession?",
+          "What is their knowledge level?",
+          "What are their pain points?",
+          "What do they want to achieve?"
+        ]
+      },
+      "key_messages": {
+        "description": "Main points to communicate, ranked by priority",
+        "structure": {
+          "primary_message": "The single most important takeaway",
+          "supporting_messages": "2-4 messages that support or expand the primary message",
+          "secondary_messages": "Optional additional points"
+        },
+        "best_practices": [
+          "Keep messages clear and concise",
+          "Prioritize by importance to audience",
+          "Ensure messages are backed by research",
+          "Make messages actionable when possible"
+        ]
+      },
+      "tone_and_style": {
+        "tone_options": [
+          "professional",
+          "conversational",
+          "technical",
+          "persuasive",
+          "educational",
+          "inspirational"
+        ],
+        "style_elements": {
+          "formality": ["formal", "semi-formal", "casual"],
+          "perspective": ["first-person", "second-person", "third-person"],
+          "voice": ["active", "passive"],
+          "sentence_length": ["short", "medium", "varied"]
+        }
+      },
+      "structure_requirements": {
+        "description": "Outline of sections and organization",
+        "format": [
+          "Section 1: Title/Purpose",
+          "Section 2: Title/Purpose",
+          "..."
+        ]
+      },
+      "word_count": {
+        "description": "Target length range",
+        "guidelines": {
+          "social_post": "50-300 words",
+          "blog_post": "600-1200 words",
+          "article": "800-1500 words",
+          "whitepaper": "2000-5000 words",
+          "email": "100-400 words"
+        }
+      },
+      "seo_keywords": {
+        "description": "Keywords for search optimization",
+        "types": {
+          "primary_keywords": "1-2 main keywords (high volume, high relevance)",
+          "secondary_keywords": "3-5 supporting keywords",
+          "long_tail_keywords": "5-10 specific phrases"
+        },
+        "best_practices": [
+          "Include keywords naturally in content",
+          "Use variations and synonyms",
+          "Focus on search intent, not just volume",
+          "Consider question-based keywords"
+        ]
+      },
+      "brand_guidelines": {
+        "description": "Brand-specific requirements",
+        "elements": {
+          "voice": "Brand personality (friendly, authoritative, innovative, etc.)",
+          "vocabulary": "Preferred and avoided terms",
+          "formatting": "Style preferences (headings, lists, quotes)",
+          "compliance": "Legal or regulatory requirements"
+        }
+      }
+    }
+  }
+}
