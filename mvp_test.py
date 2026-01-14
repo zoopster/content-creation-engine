@@ -75,7 +75,7 @@ def test_document_generation():
 
     try:
         from agents.production.production import ProductionAgent
-        from agents.base.models import AgentInput, ContentType
+        from agents.base.models import DraftContent, ContentType
         import os
 
         production = ProductionAgent()
@@ -100,31 +100,39 @@ The Content Creation Engine MVP is successfully deployed.
 Everything is working as expected.
 """
 
-        agent_input = AgentInput(
-            content={
-                "markdown_content": content,
-                "format": "docx",
-                "title": "MVP Test Article"
-            },
-            content_type=ContentType.ARTICLE
+        # Create DraftContent object
+        draft = DraftContent(
+            content=content,
+            content_type=ContentType.ARTICLE,
+            word_count=len(content.split()),
+            metadata={"title": "MVP Test Article"}
         )
 
-        print("Generating DOCX document...")
-        result = production.process(agent_input)
+        # Prepare input for production agent
+        input_data = {
+            "draft_content": draft,
+            "output_format": "docx"
+        }
 
-        if result.success:
-            file_path = result.outputs.get("file_path")
-            if file_path and os.path.exists(file_path):
-                file_size = os.path.getsize(file_path)
+        print("Generating document (DOCX if available, HTML fallback)...")
+        result = production.process(input_data)
+
+        if result and result.file_path:
+            if os.path.exists(result.file_path):
+                file_size = os.path.getsize(result.file_path)
+                file_ext = os.path.splitext(result.file_path)[1]
                 print(f"✓ Document generated successfully")
-                print(f"  - File: {file_path}")
+                print(f"  - File: {result.file_path}")
+                print(f"  - Format: {result.file_format.upper()}")
                 print(f"  - Size: {file_size} bytes")
+                if file_ext == '.html' and input_data["output_format"] == "docx":
+                    print(f"  - Note: Fell back to HTML (install python-docx for DOCX support)")
                 return True
             else:
-                print(f"✗ Document file not found: {file_path}")
+                print(f"✗ Document file not found: {result.file_path}")
                 return False
         else:
-            print(f"✗ Document generation failed: {result.error}")
+            print(f"✗ Document generation failed")
             return False
 
     except Exception as e:
@@ -139,6 +147,7 @@ def test_quality_gates():
 
     try:
         from skills.brand_voice.brand_voice import BrandVoiceSkill
+        from agents.base.models import DraftContent, ContentType
 
         brand_skill = BrandVoiceSkill()
 
@@ -149,22 +158,26 @@ def test_quality_gates():
         It avoids excessive jargon while maintaining authority.
         """
 
-        print("Validating content against brand guidelines...")
-        result = brand_skill.execute({
-            "content": test_content,
-            "content_type": "article"
-        })
+        # Create DraftContent object
+        draft = DraftContent(
+            content=test_content,
+            content_type=ContentType.ARTICLE,
+            word_count=len(test_content.split())
+        )
 
-        if result.success:
-            validation = result.outputs.get("validation")
+        print("Validating content against brand guidelines...")
+        result = brand_skill.execute(draft)
+
+        if result:
             print(f"✓ Brand validation completed")
-            print(f"  - Compliance score: {validation.compliance_score:.2f}")
-            print(f"  - Issues found: {len(validation.issues)}")
-            if validation.suggestions:
-                print(f"  - Suggestions: {len(validation.suggestions)}")
+            print(f"  - Compliance score: {result.score:.2f}")
+            print(f"  - Issues found: {len(result.issues)}")
+            if result.suggestions:
+                print(f"  - Suggestions: {len(result.suggestions)}")
+            print(f"  - Validation: {'PASSED' if result.passed else 'FAILED'}")
             return True
         else:
-            print(f"✗ Validation failed: {result.error}")
+            print(f"✗ Validation failed")
             return False
 
     except Exception as e:
