@@ -20,12 +20,14 @@ Pillow>=10.0.0             # Image handling (required by reportlab)
 # ===== Development & Testing =====
 pytest>=7.4.0              # Testing framework
 
+# ===== LLM Provider Integration =====
+anthropic>=0.40.0          # Anthropic Claude API
+openai>=1.50.0             # OpenAI GPT API
+
 # ===== Future Phases =====
 # Phase 4+: Research & External Integration
 # requests>=2.31.0         # HTTP requests for web search
 # beautifulsoup4>=4.12.0   # Web scraping
-# openai>=1.0.0            # OpenAI API (if using GPT models)
-# anthropic>=0.7.0         # Anthropic API (if using Claude models)
 
 # Optional: Enhanced Markdown Processing
 # markdown>=3.5.0          # Better markdown parsing (replaces simple regex parser)
