@@ -119,6 +119,31 @@ if not exist output (
     mkdir output
     echo [OK] Output directory created
 )
+echo.
+
+REM Setup environment file
+echo ========================================
+echo Environment Configuration
+echo ========================================
+echo.
+
+if not exist .env (
+    if exist .env.example (
+        echo Creating .env file from template...
+        copy .env.example .env >nul
+        echo [OK] .env file created
+        echo.
+        echo [WARNING] IMPORTANT: Edit .env and add your API keys before using LLM features
+        echo   Required: ANTHROPIC_API_KEY or OPENAI_API_KEY
+        echo   Edit with: notepad .env
+        echo.
+    ) else (
+        echo [WARNING] .env.example not found - skipping environment setup
+    )
+) else (
+    echo [OK] .env file already exists
+)
+echo.
 
 REM Run MVP test
 echo ========================================
@@ -142,15 +167,21 @@ if %TEST_EXIT_CODE% equ 0 (
     echo [OK] MVP is fully functional!
     echo.
     echo Next steps:
-    echo   1. Activate the virtual environment: venv\Scripts\activate.bat
-    echo   2. Run examples: python examples\phase2_endtoend.py
-    echo   3. Generate your first article (see MVP_DEPLOYMENT.md^)
-    echo   4. Customize brand settings: templates\brand\brand_config.py
+    echo   1. Add your API keys to .env file (for LLM features^)
+    echo   2. Activate the virtual environment: venv\Scripts\activate.bat
+    echo   3. Run examples:
+    echo      - python examples\phase1_example.py (no API key needed^)
+    echo      - python examples\phase2_endtoend.py (no API key needed^)
+    echo      - python examples\multi_model_example.py (requires API key^)
+    echo   4. Start the full stack:
+    echo      - Backend: python -m uvicorn api.main:app --reload
+    echo      - Frontend: cd frontend ^&^& npm install ^&^& npm run dev
     echo.
     echo Documentation:
-    echo   - MVP Guide: MVP_DEPLOYMENT.md
-    echo   - Quick Start: QUICKSTART.md
-    echo   - Architecture: CLAUDE.md
+    echo   - README.md - Complete setup and running instructions
+    echo   - MVP_DEPLOYMENT.md - MVP deployment guide
+    echo   - QUICKSTART.md - Quick start guide
+    echo   - CLAUDE.md - Architecture overview
     echo.
     echo Environment is ready! Happy content creation!
     pause
