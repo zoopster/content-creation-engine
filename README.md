@@ -30,7 +30,7 @@ The Content Creation Engine uses specialized agents and skills to automate and e
 └────────┘ └────────┘ └────────┘
 ```
 
-## Current Status: Phase 2 Complete ✅
+## Current Status: Phase 3 Complete ✅
 
 **Phase 1 - Foundation** (Complete):
 - ✅ Orchestrator Agent with routing logic
@@ -50,13 +50,31 @@ The Content Creation Engine uses specialized agents and skills to automate and e
 - ✅ Quality gate enforcement
 - ✅ Comprehensive examples
 
-**Coming Next** (Phase 3):
-- Production Agent with document generation
-- DOCX, PDF, PPTX output
-- Template system
+**Phase 3 - Production & LLM Integration** (Complete):
+- ✅ Production Agent with document generation
+- ✅ DOCX, PDF, PPTX output support
+- ✅ Template system for documents and presentations
+- ✅ Multi-model LLM support (Anthropic Claude & OpenAI GPT)
+- ✅ Model registry and provider abstraction
+- ✅ Real LLM-powered Research and Creation agents
+- ✅ FastAPI backend with workflow execution
+- ✅ React frontend wizard interface
+
+**Coming Next** (Phase 4):
 - Content repurposing capabilities
+- Parallel workflow processing
+- Real web search integration
+- External platform integrations (CMS, social media)
 
 ## Installation
+
+### Prerequisites
+
+- Python 3.12+ (3.8+ supported but 3.12 recommended)
+- Node.js 18+ and npm (for frontend)
+- API keys from at least one LLM provider:
+  - [Anthropic Claude](https://console.anthropic.com/) (recommended)
+  - [OpenAI GPT](https://platform.openai.com/api-keys) (optional)
 
 ### Option 1: Automated Setup (Recommended)
 
@@ -94,13 +112,68 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 # Install dependencies
 pip install -r requirements.txt
 
-# Run MVP test
+# Set up environment variables
+cp .env.example .env
+# Edit .env and add your API keys
+
+# Run MVP test (uses mock data, no API keys needed)
 python3 mvp_test.py
 ```
 
+### Environment Configuration
+
+Create a `.env` file from the example template:
+
+```bash
+cp .env.example .env
+```
+
+**Required Configuration:**
+```bash
+# Add at least one API key
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
+# OR
+OPENAI_API_KEY=your_openai_api_key_here
+
+# Optional: Choose default provider
+DEFAULT_PROVIDER=anthropic  # or openai
+DEFAULT_MODEL=claude-sonnet-4-20250514  # or gpt-4o
+```
+
+See [.env.example](.env.example) for complete configuration options.
+
 ## Quick Start
 
-### End-to-End Workflow (Phase 2)
+### Running the Application
+
+#### Option 1: Full Stack (API + Frontend)
+
+```bash
+# Terminal 1: Start the FastAPI backend
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+python -m uvicorn api.main:app --reload --port 8000
+
+# Terminal 2: Start the React frontend
+cd frontend
+npm install  # First time only
+npm run dev
+```
+
+Then open http://localhost:5173 in your browser to use the wizard interface.
+
+#### Option 2: API Only
+
+```bash
+# Start the API server
+source venv/bin/activate
+python -m uvicorn api.main:app --reload --port 8000
+```
+
+Access the API documentation at http://localhost:8000/docs
+
+#### Option 3: Python Scripts
+
+Use the workflow executor directly in Python:
 
 ```python
 from agents.workflow_executor import WorkflowExecutor
@@ -128,7 +201,61 @@ if result.success:
     print(f"Content: {draft.content[:200]}...")
 ```
 
+### Using Real LLM Integration
+
+The system now supports real LLM-powered content generation:
+
+```python
+from core.models import ModelRegistry, load_config_from_env
+from agents.research import LLMResearchAgent
+from agents.creation import LLMCreationAgent
+
+# Load configuration from environment
+config_manager = load_config_from_env()
+registry = config_manager.configure_registry()
+
+# Create LLM-powered agents
+research_agent = LLMResearchAgent(registry=registry)
+creation_agent = LLMCreationAgent(registry=registry)
+
+# Generate real content
+research_result = research_agent.research(
+    request_text="AI in healthcare",
+    research_depth="standard"
+)
+
+creation_result = creation_agent.create(
+    content_brief=research_result.research_brief,
+    content_type="article"
+)
+```
+
 ## Examples
+
+Run the example scripts to see different capabilities:
+
+### Phase 3: Multi-Model LLM Integration
+
+```bash
+python3 examples/multi_model_example.py
+```
+
+Demonstrates:
+- Switching between Anthropic Claude and OpenAI GPT models
+- Model-specific configurations
+- Provider abstraction layer
+
+### Phase 3: Document Production
+
+```bash
+python3 examples/phase3_production.py
+```
+
+Demonstrates:
+- DOCX document generation
+- PDF report creation
+- PPTX presentation generation
+- Template-based formatting
 
 ### Phase 2: End-to-End Workflows
 
@@ -136,11 +263,11 @@ if result.success:
 python3 examples/phase2_endtoend.py
 ```
 
-This demonstrates:
-1. ✅ Complete article production workflow
-2. ✅ Multi-platform campaign (article + social + email)
-3. ✅ Social media content generation
-4. ✅ Quality gate enforcement
+Demonstrates:
+- Complete article production workflow
+- Multi-platform campaign (article + social + email)
+- Social media content generation
+- Quality gate enforcement
 
 ### Phase 1: Core Components
 
@@ -148,11 +275,11 @@ This demonstrates:
 python3 examples/phase1_example.py
 ```
 
-This demonstrates:
-1. Workflow planning with the Orchestrator
-2. Content brief creation from research
-3. Brand voice validation
-4. Multi-platform campaign planning
+Demonstrates:
+- Workflow planning with the Orchestrator
+- Content brief creation from research
+- Brand voice validation
+- Multi-platform campaign planning
 
 ## Project Structure
 
@@ -160,14 +287,41 @@ This demonstrates:
 content-creation-engine/
 ├── agents/
 │   ├── base/              # Base classes and data models
-│   └── orchestrator/      # Orchestrator agent implementation
+│   ├── orchestrator/      # Orchestrator agent
+│   ├── research/          # Research agents (mock + LLM)
+│   ├── creation/          # Creation agents (mock + LLM)
+│   ├── production/        # Production agent (DOCX/PDF/PPTX)
+│   └── workflow_executor.py
+├── core/
+│   └── models/            # Multi-model LLM abstraction
+│       ├── base.py        # Base interfaces
+│       ├── registry.py    # Model registry
+│       ├── config.py      # Configuration management
+│       ├── anthropic_provider.py
+│       └── openai_provider.py
 ├── skills/
-│   ├── content-brief/     # Content brief creation skill
-│   └── brand-voice/       # Brand voice validation skill
-├── workflows/             # Workflow definitions (future)
-├── templates/             # Content templates
-├── examples/              # Usage examples
-└── CLAUDE.md             # Guide for Claude Code
+│   ├── content-brief/     # Content brief creation
+│   ├── brand-voice/       # Brand voice validation
+│   ├── long_form_writing/ # Article generation
+│   ├── social_content/    # Social media content
+│   ├── docx_generation/   # Word documents
+│   ├── pdf_generation/    # PDF reports
+│   └── pptx_generation/   # PowerPoint presentations
+├── api/
+│   ├── main.py           # FastAPI application
+│   ├── routers/          # API endpoints
+│   └── services/         # Business logic
+├── frontend/
+│   └── src/              # React TypeScript app
+│       ├── components/   # UI components
+│       └── api/          # API client
+├── templates/            # Document templates
+│   ├── brand/           # Brand configurations
+│   ├── documents/       # DOCX templates
+│   └── presentations/   # PPTX templates
+├── examples/            # Usage examples
+├── .env.example         # Environment configuration template
+└── CLAUDE.md           # Guide for Claude Code
 ```
 
 ## Workflows
@@ -209,7 +363,71 @@ Validates content for:
 
 ## Configuration
 
-Each agent and skill accepts configuration:
+### Environment Variables
+
+Configure the system via `.env` file:
+
+```bash
+# LLM Provider Keys (required)
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-proj-...
+
+# Provider Selection
+DEFAULT_PROVIDER=anthropic
+DEFAULT_MODEL=claude-sonnet-4-20250514
+
+# API Server
+API_HOST=127.0.0.1
+API_PORT=8000
+API_DEBUG=true
+
+# Quality Gates
+ENABLE_QUALITY_GATES=true
+QUALITY_THRESHOLD=0.7
+
+# Output Configuration
+OUTPUT_DIR=./output
+MAX_OUTPUT_FILE_SIZE=50
+```
+
+See [.env.example](.env.example) for all options.
+
+### Model Configuration
+
+Customize model settings for each agent:
+
+```python
+from core.models import ModelConfigManager, ModelRegistry
+
+# Create custom configuration
+config = {
+    "agents": {
+        "research": {
+            "provider": "anthropic",
+            "model": "claude-3-5-haiku-20241022",
+            "config": {
+                "max_tokens": 4096,
+                "temperature": 0.3
+            }
+        },
+        "creation": {
+            "provider": "openai",
+            "model": "gpt-4o",
+            "config": {
+                "max_tokens": 8192,
+                "temperature": 0.7
+            }
+        }
+    }
+}
+
+manager = ModelConfigManager(config=config)
+registry = manager.configure_registry()
+```
+
+### Agent Configuration
+
+Each agent accepts runtime configuration:
 
 ```python
 config = {
@@ -247,11 +465,40 @@ pytest tests/  # (tests to be added)
 
 ## Implementation Phases
 
-- **Phase 1** ✅: Orchestrator, content-brief, brand-voice
-- **Phase 2** (Next): Research Agent, Creation Agent, basic workflows
-- **Phase 3**: Production Agent, template system
-- **Phase 4**: Content repurposing, parallel processing
-- **Phase 5**: Quality automation, optimization
+- **Phase 1** ✅: Orchestrator, content-brief, brand-voice, base architecture
+- **Phase 2** ✅: Research Agent, Creation Agent, workflow executor, end-to-end workflows
+- **Phase 3** ✅: Production Agent, document generation (DOCX/PDF/PPTX), multi-model LLM support, API + frontend
+- **Phase 4** (Next): Content repurposing, parallel processing, real web search
+- **Phase 5**: External integrations (CMS, social platforms), quality automation, optimization
+
+## API Documentation
+
+When running the API server, access interactive documentation:
+
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+
+### Key Endpoints
+
+- `POST /api/workflow/execute` - Execute a content creation workflow
+- `GET /api/workflow/status/{job_id}` - Check workflow status
+- `GET /api/workflow/result/{job_id}` - Get workflow results
+- `GET /api/content-types` - List available content types
+- `GET /api/platforms` - List supported platforms
+- `GET /api/templates` - List available templates
+
+## Testing
+
+```bash
+# Run MVP test (no API keys needed)
+python3 mvp_test.py
+
+# Run Phase 3 tests (requires API keys)
+python3 tests/test_phase3_quick.py
+
+# Run full test suite (when available)
+pytest tests/
+```
 
 ## Contributing
 
