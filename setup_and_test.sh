@@ -45,15 +45,15 @@ print_header "Content Creation Engine - MVP Setup"
 # Check prerequisites
 print_info "Checking prerequisites..."
 
-# Check Python
-if ! command_exists python3; then
-    print_error "Python 3 is not installed"
+# Check Python 3.12
+if ! command_exists python3.12; then
+    print_error "Python 3.12 is not installed"
     echo "Please install Python 3.12 or higher from https://www.python.org/"
     exit 1
 fi
 
 # Check Python version
-PYTHON_VERSION=$(python3 --version 2>&1 | awk '{print $2}')
+PYTHON_VERSION=$(python3.12 --version 2>&1 | awk '{print $2}')
 PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
 PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
 
@@ -65,13 +65,13 @@ fi
 print_success "Python $PYTHON_VERSION found"
 
 # Check pip
-if ! command_exists pip3; then
-    print_error "pip3 is not installed"
+if ! python3.12 -m pip --version >/dev/null 2>&1; then
+    print_error "pip is not available with Python 3.12"
     echo "Please install pip: https://pip.pypa.io/en/stable/installation/"
     exit 1
 fi
 
-print_success "pip3 found"
+print_success "pip available with Python 3.12"
 
 # Check if we're in the right directory
 if [ ! -f "requirements.txt" ]; then
@@ -99,7 +99,7 @@ fi
 
 if [ ! -d "venv" ]; then
     print_info "Creating virtual environment..."
-    python3 -m venv venv
+    python3.12 -m venv venv
 
     if [ $? -eq 0 ]; then
         print_success "Virtual environment created"
@@ -198,7 +198,7 @@ print_header "Running MVP Test Suite"
 print_info "Executing comprehensive validation tests..."
 echo
 
-python3 mvp_test.py
+python3.12 mvp_test.py
 
 TEST_EXIT_CODE=$?
 
@@ -212,11 +212,11 @@ if [ $TEST_EXIT_CODE -eq 0 ]; then
     echo "  1. Add your API keys to .env file (for LLM features)"
     echo "  2. Activate the virtual environment: source venv/bin/activate"
     echo "  3. Run examples:"
-    echo "     - python3 examples/phase1_example.py (no API key needed)"
-    echo "     - python3 examples/phase2_endtoend.py (no API key needed)"
-    echo "     - python3 examples/multi_model_example.py (requires API key)"
+    echo "     - python3.12 examples/phase1_example.py (no API key needed)"
+    echo "     - python3.12 examples/phase2_endtoend.py (no API key needed)"
+    echo "     - python3.12 examples/multi_model_example.py (requires API key)"
     echo "  4. Start the full stack:"
-    echo "     - Backend: python -m uvicorn api.main:app --reload"
+    echo "     - Backend: python3.12 -m uvicorn api.main:app --reload"
     echo "     - Frontend: cd frontend && npm install && npm run dev"
     echo
     echo -e "${BLUE}Documentation:${NC}"
@@ -233,7 +233,7 @@ else
     echo -e "${YELLOW}Troubleshooting steps:${NC}"
     echo "  1. Review the test output above for specific errors"
     echo "  2. Check MVP_DEPLOYMENT.md for troubleshooting guide"
-    echo "  3. Verify Python version: python3 --version"
+    echo "  3. Verify Python version: python3.12 --version"
     echo "  4. Try reinstalling: rm -rf venv && ./setup_and_test.sh"
     echo
     echo -e "${BLUE}Need help? Check the documentation or open an issue on GitHub${NC}"
