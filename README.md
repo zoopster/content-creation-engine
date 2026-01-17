@@ -60,10 +60,13 @@ The Content Creation Engine uses specialized agents and skills to automate and e
 - ✅ FastAPI backend with workflow execution
 - ✅ React frontend wizard interface
 
-**Coming Next** (Phase 4):
+**Phase 4 - Web Search Integration** (In Progress):
+- ✅ Real web search integration (Firecrawl, Serper)
+- ✅ Search provider abstraction layer
+- ✅ Configurable search providers via environment
+- ✅ Automatic content extraction (markdown)
 - Content repurposing capabilities
 - Parallel workflow processing
-- Real web search integration
 - External platform integrations (CMS, social media)
 
 ## Installation
@@ -234,6 +237,26 @@ creation_result = creation_agent.create(
 
 Run the example scripts to see different capabilities:
 
+### Phase 4: Real Web Search Integration
+
+```bash
+python3 examples/web_search_example.py
+```
+
+Demonstrates:
+- Real web search using Firecrawl or Serper APIs
+- Search provider configuration and switching
+- WebSearchSkill query optimization
+- LLMResearchAgent with live search results
+- Automatic content extraction (markdown)
+
+To enable real web search:
+```bash
+# Add to .env:
+ENABLE_WEB_SEARCH=true
+FIRECRAWL_API_KEY=fc-your-key  # Get from https://firecrawl.dev/
+```
+
 ### Phase 3: Multi-Model LLM Integration
 
 ```bash
@@ -293,17 +316,23 @@ content-creation-engine/
 │   ├── production/        # Production agent (DOCX/PDF/PPTX)
 │   └── workflow_executor.py
 ├── core/
-│   └── models/            # Multi-model LLM abstraction
-│       ├── base.py        # Base interfaces
-│       ├── registry.py    # Model registry
-│       ├── config.py      # Configuration management
-│       ├── anthropic_provider.py
-│       └── openai_provider.py
+│   ├── models/            # Multi-model LLM abstraction
+│   │   ├── base.py        # Base interfaces
+│   │   ├── registry.py    # Model registry
+│   │   ├── config.py      # Configuration management
+│   │   ├── anthropic_provider.py
+│   │   └── openai_provider.py
+│   └── search/            # Web search integration
+│       ├── base.py        # Search provider interfaces
+│       ├── registry.py    # Search provider registry
+│       ├── firecrawl_provider.py  # Firecrawl search (recommended)
+│       └── serper_provider.py     # Serper (Google) search
 ├── skills/
 │   ├── content-brief/     # Content brief creation
 │   ├── brand-voice/       # Brand voice validation
 │   ├── long_form_writing/ # Article generation
 │   ├── social_content/    # Social media content
+│   ├── web_search/        # Web search skill
 │   ├── docx_generation/   # Word documents
 │   ├── pdf_generation/    # PDF reports
 │   └── pptx_generation/   # PowerPoint presentations
@@ -375,6 +404,11 @@ OPENAI_API_KEY=sk-proj-...
 # Provider Selection
 DEFAULT_PROVIDER=anthropic
 DEFAULT_MODEL=claude-sonnet-4-20250514
+
+# Web Search (optional - enables real research)
+ENABLE_WEB_SEARCH=true
+FIRECRAWL_API_KEY=fc-...         # Recommended: https://firecrawl.dev/
+SERPER_API_KEY=                   # Alternative: https://serper.dev/
 
 # API Server
 API_HOST=127.0.0.1

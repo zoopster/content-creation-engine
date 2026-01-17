@@ -24,11 +24,17 @@ pytest>=7.4.0              # Testing framework
 anthropic>=0.40.0          # Anthropic Claude API
 openai>=1.50.0             # OpenAI GPT API
 
-# ===== Future Phases =====
-# Phase 4+: Research & External Integration
-# requests>=2.31.0         # HTTP requests for web search
-# beautifulsoup4>=4.12.0   # Web scraping
+# ===== Phase 4: Web Search Integration =====
+# Search providers for real web research
+firecrawl-py>=1.0.0        # Firecrawl AI-optimized search (recommended)
+aiohttp>=3.9.0             # Async HTTP for Serper API
+# tavily-python>=0.3.0     # Tavily (legacy, optional)
 
-# Optional: Enhanced Markdown Processing
+# ===== Utilities =====
+python-dotenv>=1.0.0       # Environment variable loading
+python-dateutil>=2.8.2     # Date parsing utilities
+
+# ===== Optional: Enhanced Features =====
 # markdown>=3.5.0          # Better markdown parsing (replaces simple regex parser)
 # PyPDF2>=3.0.0           # PDF manipulation (if needed for repurposing)
+# beautifulsoup4>=4.12.0   # Web scraping for content extraction

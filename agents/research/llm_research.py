@@ -11,6 +11,8 @@ This module extends the base ResearchAgent with LLM-powered capabilities:
 
 import asyncio
 import json
+import logging
+import os
 import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -40,7 +42,7 @@ class LLMResearchAgent(Agent):
     - Identifying gaps and recommending additional research
 
     Usage:
-        # With default configuration
+        # With default configuration (uses mock search)
         agent = LLMResearchAgent()
         brief = await agent.process_async({"topic": "AI in healthcare"})
 
@@ -51,11 +53,22 @@ class LLMResearchAgent(Agent):
             "temperature": 0.3
         })
 
-        # With search integration (when available)
+        # With real web search (Tavily)
         agent = LLMResearchAgent(config={
-            "search_provider": "tavily",  # or "serper", "brave"
-            "search_api_key": "your-key"
+            "search_provider": "tavily",
+            "enable_web_search": True
         })
+
+        # With Serper search
+        agent = LLMResearchAgent(config={
+            "search_provider": "serper",
+            "enable_web_search": True
+        })
+
+    Environment variables for search:
+        TAVILY_API_KEY - Tavily API key
+        SERPER_API_KEY - Serper API key
+        ENABLE_WEB_SEARCH - Enable real web search (true/false)
     """
 
     # System prompts for different research tasks
@@ -127,8 +140,8 @@ Be specific and actionable in your recommendations.""",
                 - min_sources: Minimum sources to include (default: 3)
                 - max_sources: Maximum sources to include (default: 10)
                 - min_credibility: Minimum credibility score (default: 0.5)
-                - search_provider: Web search provider (optional)
-                - search_api_key: Search API key (optional)
+                - search_provider: Web search provider (tavily, serper, mock)
+                - enable_web_search: Enable real web search (default: from env)
             registry: Model registry instance (default: global registry)
         """
         super().__init__("research", config)
@@ -141,9 +154,13 @@ Be specific and actionable in your recommendations.""",
         self.max_sources = config.get("max_sources", 10)
         self.min_credibility = config.get("min_credibility", 0.5)
 
-        # Search settings (for future integration)
-        self.search_provider = config.get("search_provider")
-        self.search_api_key = config.get("search_api_key")
+        # Search settings
+        self.search_provider_name = config.get("search_provider")
+        self._search_provider = None
+
+        # Check if web search is enabled (from config or environment)
+        env_enable = os.environ.get("ENABLE_WEB_SEARCH", "").lower() == "true"
+        self.enable_web_search = config.get("enable_web_search", env_enable)
 
         # Build model configuration
         provider = config.get("provider")
@@ -328,14 +345,39 @@ Output as a JSON array of strings, like: ["query 1", "query 2", "query 3"]"""
 
         return queries[:5]
 
+    def _get_search_provider(self):
+        """Get or initialize the search provider."""
+        if self._search_provider is None:
+            try:
+                from core.search import configure_search, get_search_provider
+
+                # Configure search based on settings
+                use_mock = not self.enable_web_search
+                configure_search(
+                    provider=self.search_provider_name,
+                    use_mock=use_mock,
+                )
+                self._search_provider = get_search_provider(self.search_provider_name)
+
+                if self._search_provider:
+                    self.logger.info(
+                        f"Research agent using search provider: {self._search_provider.name}"
+                    )
+
+            except ImportError as e:
+                self.logger.warning(f"Search providers not available: {e}")
+                self._search_provider = None
+
+        return self._search_provider
+
     async def _execute_search(
         self, topic: str, queries: List[str]
     ) -> List[Dict[str, Any]]:
         """
-        Execute web searches.
+        Execute web searches using configured provider.
 
-        Currently returns mock data. Will integrate with search APIs
-        (Tavily, Serper, Brave) in future versions.
+        Uses real search providers (Tavily, Serper) when enabled,
+        otherwise falls back to mock data for testing.
 
         Args:
             topic: Research topic
@@ -344,14 +386,65 @@ Output as a JSON array of strings, like: ["query 1", "query 2", "query 3"]"""
         Returns:
             List of search results
         """
-        # TODO: Integrate with real search providers
-        # if self.search_provider == "tavily":
-        #     return await self._search_tavily(queries)
-        # elif self.search_provider == "serper":
-        #     return await self._search_serper(queries)
+        provider = self._get_search_provider()
 
-        # For now, return enhanced mock results
+        # If provider is available and not mock, use real search
+        if provider and provider.name != "mock":
+            return await self._execute_real_search(queries, provider)
+
+        # Fall back to mock results
+        self.logger.info("Using mock search results (set ENABLE_WEB_SEARCH=true for real search)")
         return self._generate_mock_results(topic, queries)
+
+    async def _execute_real_search(
+        self, queries: List[str], provider
+    ) -> List[Dict[str, Any]]:
+        """
+        Execute real web searches using the configured provider.
+
+        Args:
+            queries: Search queries to execute
+            provider: Search provider instance
+
+        Returns:
+            List of search results
+        """
+        from core.search.base import SearchConfig
+
+        all_results = []
+        seen_urls = set()
+
+        # Execute each query
+        for query in queries:
+            try:
+                config = SearchConfig(
+                    max_results=5,  # Limit per query to avoid too many results
+                    search_depth="basic",
+                )
+
+                results = await provider.search(query, config)
+
+                for result in results:
+                    # Deduplicate by URL
+                    if result.url not in seen_urls:
+                        seen_urls.add(result.url)
+                        all_results.append({
+                            "url": result.url,
+                            "title": result.title,
+                            "content": result.content,
+                            "published_date": result.published_date,
+                            "author": result.author,
+                            "source": result.source,
+                        })
+
+                self.logger.debug(f"Query '{query}' returned {len(results)} results")
+
+            except Exception as e:
+                self.logger.warning(f"Search query failed: {query} - {e}")
+                continue
+
+        self.logger.info(f"Real search returned {len(all_results)} unique results")
+        return all_results
 
     def _generate_mock_results(
         self, topic: str, queries: List[str]
