@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
 
-from api.routers import workflow, templates, content_types, platforms
+from api.routers import workflow, templates, content_types, platforms, publish
 from api.config import settings
 from api.services.workflow_service import WorkflowService
 
@@ -47,6 +47,7 @@ app.include_router(workflow.router, prefix="/api/workflow", tags=["workflow"])
 app.include_router(templates.router, prefix="/api/templates", tags=["templates"])
 app.include_router(content_types.router, prefix="/api/content-types", tags=["content-types"])
 app.include_router(platforms.router, prefix="/api/platforms", tags=["platforms"])
+app.include_router(publish.router, prefix="/api/publish/wordpress", tags=["publish"])
 
 
 @app.get("/api/health")

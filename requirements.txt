@@ -34,7 +34,10 @@ aiohttp>=3.9.0             # Async HTTP for Serper API
 python-dotenv>=1.0.0       # Environment variable loading
 python-dateutil>=2.8.2     # Date parsing utilities
 
+# ===== WordPress Integration =====
+httpx>=0.27.0              # Async HTTP client for WordPress REST API
+markdown>=3.5.0            # Markdown-to-HTML conversion for WordPress posts
+
 # ===== Optional: Enhanced Features =====
-# markdown>=3.5.0          # Better markdown parsing (replaces simple regex parser)
 # PyPDF2>=3.0.0           # PDF manipulation (if needed for repurposing)
 # beautifulsoup4>=4.12.0   # Web scraping for content extraction
