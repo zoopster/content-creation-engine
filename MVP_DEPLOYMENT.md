@@ -1,550 +1,651 @@
-# MVP Deployment Guide
+# Production Deployment Guide
 
-This guide provides step-by-step instructions for deploying a Minimum Viable Product (MVP) of the Content Creation Engine.
+> **Current Status:** Phases 1–4 complete. Real LLM integration, web search, document export,
+> WordPress publishing, and URL-to-article pipelines are all operational.
 
-## MVP Scope
+---
 
-The MVP includes:
-- **Core Workflow**: Complete article production pipeline (Research → Creation → Production)
-- **Agents**: Orchestrator, Research, Creation, Production
-- **Skills**: Content Brief, Brand Voice, Long-Form Writing, DOCX generation
-- **Output**: Generate complete articles as Markdown and DOCX files
-- **Validation**: Quality gate enforcement at each workflow stage
+## Table of Contents
 
-**Not Included in MVP** (Future phases):
-- Social media content generation
-- PowerPoint/PDF generation
-- Content repurposing
-- External API integrations (real web search, AI APIs)
-- Advanced template customization
+1. [Prerequisites](#1-prerequisites)
+2. [Installation](#2-installation)
+3. [Configuration](#3-configuration)
+4. [Running the System](#4-running-the-system)
+5. [Core Workflows](#5-core-workflows)
+6. [WordPress Publishing](#6-wordpress-publishing)
+7. [URL Input Mode](#7-url-input-mode)
+8. [Production Hardening](#8-production-hardening)
+9. [Troubleshooting](#9-troubleshooting)
 
-## Prerequisites
+---
+
+## 1. Prerequisites
 
 ### System Requirements
 
-- **Python**: 3.12 or higher (recommended)
-- **Operating System**: macOS, Linux, or Windows
-- **Disk Space**: 100MB minimum
-- **Memory**: 512MB minimum
+| Requirement | Minimum | Recommended |
+| ----------- | ------- | ----------- |
+| Python      | 3.8     | 3.12        |
+| Node.js     | 18      | 20          |
+| RAM         | 512 MB  | 2 GB        |
+| Disk        | 500 MB  | 2 GB        |
 
-### Required Tools
+### API Keys Required
 
-1. **Python 3.12+**
-   ```bash
-   python3 --version  # Should show 3.12 or higher
-   ```
+| Service          | Purpose                                  | Get Key                             |
+| ---------------- | ---------------------------------------- | ----------------------------------- |
+| Anthropic Claude | LLM (required)                           | <https://console.anthropic.com/>    |
+| OpenAI GPT       | LLM alternative (optional)               | <https://platform.openai.com/>      |
+| Firecrawl        | Web search + URL scraping (recommended)  | <https://firecrawl.dev/>            |
+| Serper           | Google Search alternative (optional)     | <https://serper.dev/>               |
 
-2. **pip** (Python package manager)
-   ```bash
-   pip3 --version
-   ```
+---
 
-3. **git** (version control)
-   ```bash
-   git --version
-   ```
-
-## Deployment Steps
-
-### 1. Clone the Repository
+## 2. Installation
 
 ```bash
-# Clone from GitHub
+# Clone repository
 git clone https://github.com/zoopster/content-creation-engine.git
 cd content-creation-engine
-```
 
-### 2. Create Virtual Environment
+# Create and activate Python virtual environment
+python3.12 -m venv venv
+source venv/bin/activate          # macOS/Linux
+# venv\Scripts\activate           # Windows
 
-**Recommended**: Use a virtual environment to isolate dependencies.
-
-```bash
-# Create virtual environment
-python3 -m venv venv
-
-# Activate virtual environment
-# On macOS/Linux:
-source venv/bin/activate
-
-# On Windows:
-venv\Scripts\activate
-```
-
-Your prompt should now show `(venv)` prefix.
-
-### 3. Install Dependencies
-
-```bash
-# Install required packages
+# Install all dependencies
 pip install -r requirements.txt
+
+# Install frontend dependencies
+cd frontend && npm install && cd ..
 ```
 
-**Expected packages for MVP**:
-- pyyaml (workflow configuration)
-- python-docx (Word document generation)
-- pytest (testing framework)
+---
 
-### 4. Verify Installation
+## 3. Configuration
 
-Run the quick test to ensure everything is working:
+### 3.1 Environment File
 
 ```bash
-# Run basic tests
-python3 -m pytest tests/test_phase3_quick.py -v
+cp .env.example .env
 ```
 
-Expected output: All tests should pass.
+Edit `.env` with your actual values. The minimum required configuration depends on your use case:
 
-### 5. Configure Brand Settings (Optional)
-
-The MVP includes default brand settings. To customize:
+#### Minimum: LLM-only (no real web search)
 
 ```bash
-# Edit brand configuration
-nano templates/brand/brand_config.py
+ANTHROPIC_API_KEY=sk-ant-...
+DEFAULT_PROVIDER=anthropic
+DEFAULT_MODEL=claude-sonnet-4-20250514
+ENABLE_WEB_SEARCH=false
 ```
 
-Key settings to customize:
-- `BRAND_NAME`: Your organization name
-- `TONE`: Desired content tone (professional, casual, technical, etc.)
-- `VOCABULARY`: Preferred and avoided terms
-
-### 6. Test MVP Workflow
-
-Run the end-to-end example to verify deployment:
+#### Recommended: Full production setup
 
 ```bash
-# Run Phase 2 end-to-end workflow
-python3 examples/phase2_endtoend.py
+# LLM
+ANTHROPIC_API_KEY=sk-ant-...
+DEFAULT_PROVIDER=anthropic
+DEFAULT_MODEL=claude-sonnet-4-20250514
+
+# Web search (enables real research and URL scraping)
+ENABLE_WEB_SEARCH=true
+FIRECRAWL_API_KEY=fc-...
+
+# WordPress publishing
+WORDPRESS_URL=https://your-site.com
+WORDPRESS_USERNAME=your_username
+WORDPRESS_APP_PASSWORD=xxxx xxxx xxxx xxxx xxxx xxxx
+
+# API server
+API_HOST=127.0.0.1
+API_PORT=8000
+API_ENV=production
+API_DEBUG=false
+
+# Output
+OUTPUT_DIR=./output
 ```
 
-**Expected behavior**:
-1. Creates workflow request
-2. Generates research brief
-3. Produces article draft
-4. Validates brand voice
-5. Outputs results to console
+### 3.2 WordPress Application Password
 
-You should see:
-```
-=== Phase 2: End-to-End Workflow Examples ===
+1. Log in to WordPress Admin
+2. Go to **Users → Profile** (or **Users → Edit User** for other accounts)
+3. Scroll to **Application Passwords**
+4. Enter a name (e.g. `Content Engine`), click **Add New Application Password**
+5. Copy the generated password — paste it as-is into `WORDPRESS_APP_PASSWORD` (spaces are stripped automatically)
 
-Example 1: Complete Article Production
-...
-✓ Research completed
-✓ Content created
-✓ Quality validated
-```
+> **Note:** Application Passwords require WordPress 5.6+ and HTTPS on your site.
 
-### 7. Generate Your First Article
+### 3.3 Model Selection
 
-Create a simple script or use Python interactive mode:
-
-```python
-from agents.workflow_executor import WorkflowExecutor
-from agents.base.models import WorkflowRequest, ContentType
-
-# Initialize executor
-executor = WorkflowExecutor()
-
-# Create request
-request = WorkflowRequest(
-    request_text="Write an article about the benefits of cloud computing for small businesses",
-    content_types=[ContentType.ARTICLE],
-    additional_context={
-        "target_audience": "Small business owners",
-        "word_count": 1000,
-        "tone": "professional but accessible"
-    }
-)
-
-# Execute workflow
-result = executor.execute(request)
-
-# Check results
-if result.success:
-    draft = result.outputs.get("draft_content")
-    print(f"\n✓ Article generated: {draft.word_count} words")
-    print(f"\nFirst 200 characters:")
-    print(draft.content[:200])
-else:
-    print(f"✗ Failed: {result.error}")
-```
-
-### 8. Generate DOCX Output
-
-To create Word documents:
+To use a different model per agent, set in `.env`:
 
 ```bash
-# Run Phase 3 production example
-python3 examples/phase3_production.py
+DEFAULT_PROVIDER=anthropic
+DEFAULT_MODEL=claude-sonnet-4-20250514   # Best quality
+# DEFAULT_MODEL=claude-3-5-haiku-20241022  # Faster, cheaper
 ```
 
-This will:
-1. Generate article content
-2. Convert to DOCX format
-3. Save to `output/` directory (created automatically)
+Or mix providers per agent via `core/models/config.py`.
 
-**Output location**: `output/article_YYYYMMDD_HHMMSS.docx`
+---
 
-## Production Deployment Options
+## 4. Running the System
 
-### Option 1: Local Server Deployment
-
-For a single-user or small team setup:
+### 4.1 Backend API
 
 ```bash
-# Keep the virtual environment activated
 source venv/bin/activate
 
-# Run your custom workflow script
-python3 my_workflow.py
+# Development (auto-reload)
+uvicorn api.main:app --reload --port 8000
+
+# Production
+uvicorn api.main:app --host 0.0.0.0 --port 8000 --workers 2
 ```
 
-### Option 2: Docker Deployment (Future)
+API docs available at:
 
-Docker support not included in MVP. Plan for Phase 4.
+- Swagger UI: <http://localhost:8000/docs>
+- ReDoc: <http://localhost:8000/redoc>
 
-### Option 3: Cloud Deployment (Future)
-
-Cloud deployment (AWS, GCP, Azure) planned for Phase 5.
-
-## Configuration
-
-### Environment Variables (Optional)
-
-Create a `.env` file for sensitive configuration:
+### 4.2 Frontend
 
 ```bash
-# .env (already in .gitignore)
-BRAND_NAME=YourCompany
-DEFAULT_TONE=professional
-OUTPUT_DIRECTORY=./output
-LOG_LEVEL=INFO
+cd frontend
+
+# Development (hot reload at :5173)
+npm run dev
+
+# Production build
+npm run build
+# Output in frontend/dist/ — serve with any static file server
 ```
 
-### Directory Structure
-
-After deployment, your structure should look like:
-
-```
-content-creation-engine/
-├── venv/                   # Virtual environment (created during setup)
-├── output/                 # Generated content (auto-created)
-├── agents/                 # Core agent implementations
-├── skills/                 # Skill modules
-├── examples/               # Usage examples
-├── templates/              # Brand and content templates
-└── tests/                  # Test suite
-```
-
-## Testing the Deployment
-
-### Quick Test Checklist
-
-Run through this checklist to verify MVP is working:
-
-- [ ] Virtual environment activated
-- [ ] Dependencies installed (`pip list` shows python-docx, pyyaml, pytest)
-- [ ] Tests pass (`pytest tests/test_phase3_quick.py`)
-- [ ] Phase 2 example runs (`python3 examples/phase2_endtoend.py`)
-- [ ] Phase 3 example creates DOCX (`python3 examples/phase3_production.py`)
-- [ ] Output directory contains generated files
-
-### Test Article Generation
+### 4.3 Verify Everything Is Running
 
 ```bash
-# Simple test script
-cat > test_mvp.py << 'EOF'
-from agents.workflow_executor import WorkflowExecutor
-from agents.base.models import WorkflowRequest, ContentType
+# Health check
+curl http://localhost:8000/api/health
 
-executor = WorkflowExecutor()
-request = WorkflowRequest(
-    request_text="Write a brief article about sustainable technology",
-    content_types=[ContentType.ARTICLE]
-)
-result = executor.execute(request)
+# Verify WordPress connection (if configured)
+curl http://localhost:8000/api/publish/wordpress/verify
 
-if result.success:
-    print("✓ MVP is working correctly!")
-    print(f"Generated {result.outputs['draft_content'].word_count} words")
-else:
-    print(f"✗ Error: {result.error}")
-EOF
-
-python3 test_mvp.py
+# Test LLM connectivity (runs a minimal workflow)
+curl -X POST http://localhost:8000/api/workflow/execute \
+  -H "Content-Type: application/json" \
+  -d '{"request_text": "Write a short test article about productivity", "content_types": ["article"]}'
 ```
 
-## Common Issues and Troubleshooting
+### 4.4 Process Manager (Production)
 
-### Issue: `ModuleNotFoundError`
+To keep the API running persistently on Linux, use a systemd service:
 
-**Symptom**: `ModuleNotFoundError: No module named 'docx'`
+```ini
+# /etc/systemd/system/cce-api.service
+[Unit]
+Description=Content Creation Engine API
+After=network.target
 
-**Solution**:
+[Service]
+User=www-data
+WorkingDirectory=/opt/content-creation-engine
+EnvironmentFile=/opt/content-creation-engine/.env
+ExecStart=/opt/content-creation-engine/venv/bin/uvicorn api.main:app --host 0.0.0.0 --port 8000 --workers 2
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
 ```bash
-# Ensure virtual environment is activated
-source venv/bin/activate  # macOS/Linux
-# OR
-venv\Scripts\activate      # Windows
-
-# Reinstall dependencies
-pip install -r requirements.txt
+sudo systemctl enable cce-api
+sudo systemctl start cce-api
+sudo systemctl status cce-api
 ```
 
-### Issue: Permission Denied on Output
+---
 
-**Symptom**: `PermissionError: [Errno 13] Permission denied: 'output/'`
+## 5. Core Workflows
 
-**Solution**:
+### 5.1 Topic-Based Article (Search + LLM)
+
+The standard workflow: provide a topic and let the system research, write, and produce a document.
+
 ```bash
-# Create output directory manually
-mkdir -p output
-chmod 755 output
+# Submit workflow
+JOB=$(curl -s -X POST http://localhost:8000/api/workflow/execute \
+  -H "Content-Type: application/json" \
+  -d '{
+    "request_text": "Write a comprehensive article about AI adoption in small businesses",
+    "content_types": ["article"],
+    "target_audience": "Small business owners",
+    "tone": "professional",
+    "word_count_min": 800,
+    "word_count_max": 1500,
+    "output_format": "html"
+  }' | python3 -c "import sys,json; print(json.load(sys.stdin)['job_id'])")
+
+echo "Job ID: $JOB"
+
+# Poll status
+curl http://localhost:8000/api/workflow/status/$JOB
+
+# Get result when completed
+curl http://localhost:8000/api/workflow/result/$JOB
 ```
 
-### Issue: Tests Failing
+**Pipeline:** Orchestrator → Research (web search or mock) → Content Brief → Creation (LLM) → Brand Voice → Production (HTML/DOCX/PDF)
 
-**Symptom**: `pytest` shows failed tests
-
-**Solution**:
-```bash
-# Run verbose tests to see details
-python3 -m pytest tests/test_phase3_quick.py -v -s
-
-# Check Python version (must be 3.8+)
-python3 --version
-
-# Verify all dependencies installed
-pip list | grep -E "(pyyaml|docx|pytest)"
-```
-
-### Issue: Import Errors
-
-**Symptom**: `ImportError: attempted relative import with no known parent package`
-
-**Solution**:
-```bash
-# Run scripts from project root directory
-cd /path/to/content-creation-engine
-python3 examples/phase2_endtoend.py
-
-# Don't run: cd examples && python3 phase2_endtoend.py
-```
-
-### Issue: Output Files Not Generated
-
-**Symptom**: Script runs but no files in `output/`
-
-**Solution**:
-```bash
-# Check if output directory exists
-ls -la output/
-
-# If not, create it
-mkdir -p output
-
-# Run Phase 3 example which explicitly saves files
-python3 examples/phase3_production.py
-
-# Check for files
-ls -la output/
-```
-
-## Usage Examples
-
-### Example 1: Generate Blog Post
+### 5.2 Python SDK (Direct)
 
 ```python
 from agents.workflow_executor import WorkflowExecutor
 from agents.base.models import WorkflowRequest, ContentType
 
 executor = WorkflowExecutor()
-request = WorkflowRequest(
-    request_text="Create a blog post about AI in healthcare",
+result = executor.execute(WorkflowRequest(
+    request_text="Write an article about sustainable cloud computing",
     content_types=[ContentType.ARTICLE],
     additional_context={
-        "target_audience": "Healthcare professionals",
-        "word_count": 1200,
-        "tone": "authoritative",
-        "include_sections": ["Introduction", "Current Applications",
-                            "Benefits", "Challenges", "Future Outlook"]
+        "target_audience": "IT decision makers",
+        "output_format": "html",
     }
-)
-
-result = executor.execute(request)
-print(result.outputs["draft_content"].content)
-```
-
-### Example 2: Generate with Custom Brand Voice
-
-```python
-from agents.workflow_executor import WorkflowExecutor
-from agents.base.models import WorkflowRequest, ContentType
-
-# Brand voice will automatically validate against configured guidelines
-request = WorkflowRequest(
-    request_text="Write about cybersecurity best practices",
-    content_types=[ContentType.ARTICLE],
-    additional_context={
-        "brand_voice": "technical_professional",
-        "avoid_jargon": False,  # Technical audience
-        "tone": "expert"
-    }
-)
-
-executor = WorkflowExecutor()
-result = executor.execute(request)
-
-# Check brand validation results
-validation = result.outputs.get("brand_validation")
-if validation:
-    print(f"Brand compliance score: {validation.compliance_score}")
-```
-
-### Example 3: Export to DOCX
-
-```python
-from agents.production.production import ProductionAgent
-from agents.base.models import AgentInput, ContentType
-from datetime import datetime
-
-# Create production agent
-production = ProductionAgent()
-
-# Prepare content
-content = """
-# My Article Title
-
-This is the introduction paragraph...
-
-## Section 1
-Content here...
-"""
-
-# Generate DOCX
-agent_input = AgentInput(
-    content={
-        "markdown_content": content,
-        "format": "docx",
-        "title": "My Article"
-    },
-    content_type=ContentType.ARTICLE
-)
-
-result = production.process(agent_input)
+))
 
 if result.success:
-    # File automatically saved to output/
-    print(f"✓ Document created: {result.outputs['file_path']}")
+    draft = result.outputs["draft_content"]
+    print(f"Generated {draft.word_count} words")
+    print(draft.content[:500])
 ```
 
-## Performance Expectations
+### 5.3 Output Formats
 
-### MVP Performance Metrics
+| Format         | `output_format` value | Notes                            |
+| -------------- | --------------------- | -------------------------------- |
+| HTML           | `html`                | Default, best for WordPress      |
+| Markdown       | `markdown`            | Plain text                       |
+| Word (DOCX)    | `docx`                | Requires `python-docx`           |
+| PDF            | `pdf`                 | Requires `reportlab`             |
+| PowerPoint     | `pptx`                | For presentation content type    |
 
-- **Article Generation**: ~2-5 seconds (mock research data)
-- **DOCX Export**: ~1-2 seconds
-- **Full Workflow**: ~5-10 seconds
-- **Memory Usage**: ~50-100MB
+---
 
-**Note**: These metrics are for MVP with mock data. Real API integrations (Phase 4+) will be slower.
+## 6. WordPress Publishing
 
-## Next Steps After MVP
+### 6.1 Publish a Completed Article
 
-Once MVP is deployed and validated:
-
-1. **Phase 4 Enhancement**:
-   - Add real web search integration
-   - Implement content repurposing
-   - Add social media content generation
-
-2. **Production Hardening**:
-   - Add error logging
-   - Implement retry logic
-   - Add monitoring/metrics
-
-3. **Scaling**:
-   - Parallel workflow execution
-   - Queue-based processing
-   - API service wrapper
-
-4. **Integration**:
-   - CMS integration (WordPress, etc.)
-   - Social platform APIs
-   - Email marketing tools
-
-## Support and Documentation
-
-- **Quick Start**: See [QUICKSTART.md](./QUICKSTART.md)
-- **Architecture**: See [CLAUDE.md](./CLAUDE.md)
-- **Phase Details**: See PHASE1_COMPLETE.md, PHASE2_COMPLETE.md, PHASE3_COMPLETE.md
-- **Examples**: Check `examples/` directory
-- **Issues**: Report at https://github.com/zoopster/content-creation-engine/issues
-
-## Security Considerations
-
-### MVP Security Notes
-
-- No external API calls (all mock data)
-- No user authentication (single-user system)
-- Local file system only
-- No network exposure
-
-### For Production
-
-Before production deployment:
-- [ ] Add input validation
-- [ ] Implement authentication
-- [ ] Sanitize file paths
-- [ ] Add rate limiting
-- [ ] Enable secure logging
-- [ ] Review dependency vulnerabilities (`pip audit`)
-
-## Maintenance
-
-### Regular Updates
+After a workflow completes, publish the content directly to WordPress:
 
 ```bash
-# Activate virtual environment
+curl -X POST http://localhost:8000/api/publish/wordpress \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "AI Adoption in Small Businesses: A 2026 Guide",
+    "content": "<h2>Introduction</h2><p>Artificial intelligence...</p>",
+    "content_format": "html",
+    "status": "draft",
+    "category_names": ["Technology", "Business"],
+    "tag_names": ["AI", "small business", "2026"]
+  }'
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "post_id": 142,
+  "post_url": "https://your-site.com/ai-adoption-small-businesses",
+  "edit_url": "https://your-site.com/wp-admin/post.php?post=142&action=edit",
+  "status": "draft"
+}
+```
+
+Open `edit_url` to review and publish the draft in WordPress.
+
+### 6.2 Post Status Options
+
+| Status    | Behaviour                              |
+| --------- | -------------------------------------- |
+| `draft`   | Saved as draft, not visible publicly   |
+| `publish` | Live immediately                       |
+| `pending` | Queued for editor review               |
+| `private` | Visible only to logged-in editors      |
+
+### 6.3 Multi-Site Support
+
+Override credentials per-request to publish to different WordPress sites:
+
+```bash
+curl -X POST http://localhost:8000/api/publish/wordpress \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "My Article",
+    "content": "...",
+    "credentials": {
+      "wp_url": "https://second-site.com",
+      "username": "editor",
+      "app_password": "xxxx xxxx xxxx xxxx xxxx xxxx"
+    }
+  }'
+```
+
+### 6.4 Utility Endpoints
+
+```bash
+# Test connection
+curl http://localhost:8000/api/publish/wordpress/verify
+
+# List existing categories
+curl http://localhost:8000/api/publish/wordpress/categories
+
+# List existing tags
+curl http://localhost:8000/api/publish/wordpress/tags
+```
+
+Categories and tags are **auto-created** if they don't exist when you publish.
+
+---
+
+## 7. URL Input Mode
+
+Feed specific URLs as primary source material instead of (or alongside) web search.
+
+### 7.1 Single URL
+
+```bash
+curl -X POST http://localhost:8000/api/workflow/execute \
+  -H "Content-Type: application/json" \
+  -d '{
+    "request_text": "Write a comprehensive article based on this source",
+    "content_types": ["article"],
+    "source_urls": ["https://example.com/original-article"],
+    "target_audience": "General readers",
+    "output_format": "html"
+  }'
+```
+
+### 7.2 Multiple URLs
+
+Up to 10 URLs can be provided. All are scraped and used as primary sources:
+
+```bash
+curl -X POST http://localhost:8000/api/workflow/execute \
+  -H "Content-Type: application/json" \
+  -d '{
+    "request_text": "Synthesize these sources into a definitive guide",
+    "content_types": ["article"],
+    "source_urls": [
+      "https://site-a.com/research-paper",
+      "https://site-b.com/case-study",
+      "https://site-c.com/industry-report"
+    ],
+    "tone": "authoritative",
+    "word_count_min": 1200
+  }'
+```
+
+### 7.3 How URL Scraping Works
+
+1. Each URL is scraped using **Firecrawl** (if `FIRECRAWL_API_KEY` is set) for clean markdown extraction — handles JavaScript-rendered pages
+2. Falls back to a basic **httpx** fetch + HTML stripping if Firecrawl is not configured
+3. Scraped content is given a **credibility score of 0.9** (vs ~0.7 for web search results) so it dominates the research brief
+4. With `ENABLE_WEB_SEARCH=false`, URL-only mode works — no additional search is performed
+
+### 7.4 End-to-End: Scrape → Write → Publish
+
+```bash
+# Step 1: Submit workflow with source URLs
+JOB=$(curl -s -X POST http://localhost:8000/api/workflow/execute \
+  -H "Content-Type: application/json" \
+  -d '{
+    "request_text": "Rewrite this as a polished article for our blog",
+    "content_types": ["article"],
+    "source_urls": ["https://example.com/source"],
+    "output_format": "html"
+  }' | python3 -c "import sys,json; print(json.load(sys.stdin)['job_id'])")
+
+# Step 2: Wait for completion and get content preview
+RESULT=$(curl -s http://localhost:8000/api/workflow/result/$JOB)
+echo $RESULT | python3 -c "import sys,json; print(json.load(sys.stdin).get('content_preview',''))"
+
+# Step 3: Download full HTML file and publish to WordPress
+curl -o article.html http://localhost:8000/api/workflow/download/$JOB/0
+
+curl -X POST http://localhost:8000/api/publish/wordpress \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"title\": \"Your Article Title\",
+    \"content\": \"$(cat article.html)\",
+    \"status\": \"draft\",
+    \"category_names\": [\"Blog\"]
+  }"
+```
+
+> **Tip:** `content_preview` is capped at 500 characters. Always use the download endpoint
+> (`GET /api/workflow/download/{job_id}/0`) for the full article body.
+
+---
+
+## 8. Production Hardening
+
+### 8.1 Reverse Proxy (nginx)
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name your-domain.com;
+
+    ssl_certificate /etc/letsencrypt/live/your-domain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/your-domain.com/privkey.pem;
+
+    # API
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 300s;  # Long timeout for LLM workflows
+    }
+
+    # Frontend
+    location / {
+        root /opt/content-creation-engine/frontend/dist;
+        try_files $uri $uri/ /index.html;
+    }
+}
+```
+
+### 8.2 CORS Configuration
+
+Update `.env` for your production frontend URL:
+
+```bash
+CORS_ORIGINS=https://your-domain.com
+```
+
+### 8.3 Persistent Job Storage
+
+By default, workflow jobs are stored in memory and lost on restart. For persistence:
+
+- Replace the `jobs: Dict` in [api/routers/workflow.py](api/routers/workflow.py) with Redis (`redis-py`) or a lightweight SQLite store
+- The current in-memory store is fine for single-instance deployments where job loss on restart is acceptable
+
+### 8.4 Rate Limiting
+
+Enable rate limiting in `.env`:
+
+```bash
+ENABLE_RATE_LIMITING=true
+RATE_LIMIT_PER_MINUTE=60
+```
+
+### 8.5 Security Checklist
+
+- [ ] Set `API_DEBUG=false` in production
+- [ ] Use HTTPS (required for WordPress Application Passwords)
+- [ ] Restrict `CORS_ORIGINS` to your actual frontend domain
+- [ ] Store `.env` with `chmod 600 .env`
+- [ ] Never commit `.env` to git (already in `.gitignore`)
+- [ ] Run `pip audit` periodically for dependency vulnerabilities
+- [ ] Rotate API keys if compromised (Anthropic, Firecrawl, WordPress App Password)
+
+---
+
+## 9. Troubleshooting
+
+### LLM / API issues
+
+**Symptom:** `AuthenticationError` or `401 Unauthorized` from Claude/OpenAI
+
+```bash
+# Verify key is loaded
+python3 -c "import os; from dotenv import load_dotenv; load_dotenv(); print(os.environ.get('ANTHROPIC_API_KEY','NOT SET')[:10])"
+```
+
+**Symptom:** Workflow completes but content is mock/generic (no real LLM output)
+
+- Check `DEFAULT_PROVIDER` and `DEFAULT_MODEL` are set in `.env`
+- Verify the venv is activated when running uvicorn
+
+---
+
+### Web search issues
+
+**Symptom:** Research uses mock data despite `ENABLE_WEB_SEARCH=true`
+
+```bash
+# Check provider initialisation
+python3 -c "
+from core.search import configure_search, get_search_provider
+configure_search()
+p = get_search_provider()
+print('Provider:', p.name if p else 'None')
+print('Available:', p.is_available() if p else False)
+"
+```
+
+- Ensure `FIRECRAWL_API_KEY` starts with `fc-`
+- Test the key directly: `curl -H "Authorization: Bearer fc-..." https://api.firecrawl.dev/v1/search?q=test`
+
+---
+
+### WordPress publish issues
+
+**Symptom:** `HTTP 401` from publish endpoint
+
+- Confirm Application Password was copied correctly (with or without spaces — both work)
+- Verify your WordPress user has the `publish_posts` capability
+- Check your site uses HTTPS (some hosts block Application Passwords on HTTP)
+
+**Symptom:** `Could not connect` error
+
+```bash
+# Test REST API availability directly
+curl https://your-site.com/wp-json/wp/v2/posts?per_page=1
+```
+
+If this returns `{"code":"rest_no_route",...}`, the WordPress REST API may be disabled by a security plugin.
+
+---
+
+### URL scraping issues
+
+**Symptom:** Scraped content is empty or very short
+
+- The target URL may require JavaScript rendering — use Firecrawl (configured via `FIRECRAWL_API_KEY`) for JS-heavy sites
+- Some sites block scrapers; check if the URL loads in a browser with no cookies or extensions
+
+**Symptom:** `Failed to scrape` warnings in logs
+
+```bash
+# Test Firecrawl scrape directly
+python3 -c "
+import asyncio
+from core.search.firecrawl_provider import FirecrawlSearchProvider
+import os; from dotenv import load_dotenv; load_dotenv()
+p = FirecrawlSearchProvider(api_key=os.environ['FIRECRAWL_API_KEY'])
+result = asyncio.run(p.scrape_url('https://example.com'))
+print('Keys:', list(result.keys()))
+print('Content length:', len(result.get('markdown','') or ''))
+"
+```
+
+---
+
+### General
+
+**Symptom:** `ModuleNotFoundError`
+
+```bash
+# Always run from project root with venv activated
 source venv/bin/activate
-
-# Update dependencies
-pip install --upgrade -r requirements.txt
-
-# Run tests to verify
-pytest tests/
+python -m uvicorn api.main:app --reload --port 8000
 ```
 
-### Backup
-
-Important directories to backup:
-- `templates/brand/` - Custom brand configuration
-- `output/` - Generated content (if needed)
-- `.env` - Environment configuration (if using)
-
-## Uninstallation
-
-To remove the MVP:
+**Symptom:** Port 8000 already in use
 
 ```bash
-# Deactivate virtual environment
-deactivate
-
-# Remove project directory
-cd ..
-rm -rf content-creation-engine
-
-# That's it! All dependencies were in the virtual environment
+lsof -i :8000 | grep LISTEN
+kill -9 <PID>
 ```
 
-## License
+**Symptom:** Workflow times out or hangs
 
-[License details in main README.md]
+- LLM workflows can take 30–120 seconds depending on model and content length
+- Increase timeout: `proxy_read_timeout 300s` in nginx, or `WORKFLOW_TIMEOUT=300` in `.env`
+- Check API server logs: `journalctl -u cce-api -f`
 
-## Version
+---
 
-- **MVP Version**: 1.0.0
-- **Based on**: Phase 3 Complete
-- **Last Updated**: 2026-01-14
+## Reference
+
+### API Endpoints
+
+| Method | Endpoint                                      | Description               |
+| ------ | --------------------------------------------- | ------------------------- |
+| GET    | `/api/health`                                 | Health check              |
+| POST   | `/api/workflow/execute`                       | Start workflow (async)    |
+| GET    | `/api/workflow/status/{job_id}`               | Poll job status           |
+| GET    | `/api/workflow/result/{job_id}`               | Get completed result      |
+| GET    | `/api/workflow/download/{job_id}/{file_id}`   | Download output file      |
+| GET    | `/api/publish/wordpress/verify`               | Test WordPress connection |
+| GET    | `/api/publish/wordpress/categories`           | List WP categories        |
+| GET    | `/api/publish/wordpress/tags`                 | List WP tags              |
+| POST   | `/api/publish/wordpress`                      | Publish post              |
+
+### Key `.env` Variables
+
+| Variable                  | Default                     | Description                    |
+| ------------------------- | --------------------------- | ------------------------------ |
+| `ANTHROPIC_API_KEY`       | —                           | Required for Claude            |
+| `OPENAI_API_KEY`          | —                           | Optional, for GPT              |
+| `DEFAULT_PROVIDER`        | `anthropic`                 | LLM provider                   |
+| `DEFAULT_MODEL`           | `claude-sonnet-4-20250514`  | Model ID                       |
+| `ENABLE_WEB_SEARCH`       | `false`                     | Enable real research           |
+| `FIRECRAWL_API_KEY`       | —                           | Web search + URL scraping      |
+| `WORDPRESS_URL`           | —                           | WordPress site URL             |
+| `WORDPRESS_USERNAME`      | —                           | WordPress username             |
+| `WORDPRESS_APP_PASSWORD`  | —                           | Application password           |
+| `OUTPUT_DIR`              | `./output`                  | Generated file location        |
+| `API_PORT`                | `8000`                      | API server port                |
+| `CORS_ORIGINS`            | `localhost:5173,3000`       | Allowed frontend origins       |
+
+### Phase Status
+
+| Phase | Status | Features |
+| --- | --- | --- |
+| 1 | Complete | Orchestrator, Content Brief, Brand Voice |
+| 2 | Complete | Research Agent, Creation Agent, End-to-End Workflows |
+| 3 | Complete | Production Agent, DOCX/PDF/PPTX, LLM integration, API + Frontend |
+| 4 | In Progress | Web search, URL input, WordPress publish (all done); content repurpose (pending) |
+| 5 | Planned | CMS integrations, parallel processing, quality automation |
