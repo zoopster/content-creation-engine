@@ -1,227 +1,185 @@
 # Quick Start Guide
 
-Get started with the Content Creation Engine in 5 minutes.
+Get started with the Content Creation Engine in a few minutes.
 
 ## Prerequisites
 
-- Python 3.8 or higher
-- No external dependencies required for Phase 1
+- Python 3.12+ (3.8+ supported)
+- Node.js 18+ and npm (frontend only)
+- API key for at least one LLM provider (Anthropic recommended)
 
-## Running the Examples
+## 1. Install
 
 ```bash
-# Navigate to the project directory
-cd /Users/johnpugh/Documents/source/content-creation-engine
+git clone https://github.com/zoopster/content-creation-engine.git
+cd content-creation-engine
 
-# Run the Phase 1 examples
-python3 examples/phase1_example.py
+python3 -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
+
+pip install -r requirements.txt
 ```
 
-You should see output demonstrating:
-1. ✅ Workflow planning
-2. ✅ Content brief creation
-3. ✅ Brand voice validation (good vs. bad examples)
-4. ✅ Multi-platform campaign planning
+## 2. Configure
 
-## Basic Usage
-
-### 1. Plan a Content Workflow
-
-```python
-import sys
-sys.path.append('/Users/johnpugh/Documents/source/content-creation-engine')
-
-from agents.orchestrator import OrchestratorAgent
-from agents.base.models import WorkflowRequest, ContentType
-
-# Create orchestrator
-orchestrator = OrchestratorAgent()
-
-# Create a request
-request = WorkflowRequest(
-    request_text="Write an article about sustainable agriculture",
-    content_types=[ContentType.ARTICLE],
-    priority="normal"
-)
-
-# Get execution plan
-result = orchestrator.process(request)
-
-# View the plan
-print(f"Workflow: {result['workflow_type']}")
-for step in result['execution_plan']:
-    print(f"- {step.get('agent') or step.get('skill')}")
+```bash
+cp .env.example .env
 ```
 
-### 2. Create a Content Brief
+Open `.env` and set at minimum:
 
-```python
-from skills import ContentBriefSkill
-from agents.base.models import ResearchBrief, Source, ContentType, ToneType
-
-# Create skill
-skill = ContentBriefSkill()
-
-# Mock research data
-research = ResearchBrief(
-    topic="Sustainable Agriculture",
-    sources=[
-        Source(
-            url="https://example.com/agriculture",
-            title="Modern Farming Techniques",
-            credibility_score=0.85,
-            key_facts=["Sustainable farming reduces water usage by 40%"]
-        )
-    ],
-    key_findings=[
-        "Sustainable practices improve soil health",
-        "Reduced environmental impact"
-    ],
-    data_points={"water_savings": "40%"}
-)
-
-# Generate brief
-brief = skill.execute(
-    research_brief=research,
-    content_type=ContentType.ARTICLE,
-    target_audience="Farmers and agricultural professionals"
-)
-
-print(f"Key Messages: {brief.key_messages}")
-print(f"Structure: {brief.structure_requirements}")
+```bash
+ANTHROPIC_API_KEY=sk-ant-...    # Required — or use OPENAI_API_KEY
+DEFAULT_PROVIDER=anthropic
+DEFAULT_MODEL=claude-sonnet-4-20250514
 ```
 
-### 3. Validate Brand Voice
+**Optional — enable real web search:**
 
-```python
-from skills import BrandVoiceSkill
-from agents.base.models import DraftContent, ContentType, ToneType
-
-# Create skill
-skill = BrandVoiceSkill()
-
-# Your content
-draft = DraftContent(
-    content="""
-    Sustainable agriculture improves soil health while reducing environmental impact.
-    Modern farming techniques achieve 40% water savings through efficient irrigation
-    systems. These practices benefit both farmers and ecosystems.
-    """,
-    content_type=ContentType.ARTICLE,
-    word_count=30
-)
-
-# Validate
-result = skill.execute(draft, target_tone=ToneType.PROFESSIONAL)
-
-if result.passed:
-    print(f"✅ Passed! Score: {result.score:.2f}")
-else:
-    print(f"❌ Failed. Score: {result.score:.2f}")
-    print(f"Issues: {result.issues}")
-    print(f"Suggestions: {result.suggestions}")
+```bash
+ENABLE_WEB_SEARCH=true
+FIRECRAWL_API_KEY=fc-...        # Recommended: https://firecrawl.dev/
+# SERPER_API_KEY=...            # Alternative (Google Search)
 ```
 
-## Available Content Types
+**Optional — WordPress publishing:**
 
-- `ContentType.ARTICLE` - Long-form articles (800-1500 words)
-- `ContentType.BLOG_POST` - Blog posts (600-1200 words)
-- `ContentType.SOCIAL_POST` - Social media (50-300 words)
-- `ContentType.WHITEPAPER` - Whitepapers (2000-5000 words)
-- `ContentType.EMAIL` - Email content (100-400 words)
-- `ContentType.NEWSLETTER` - Newsletters
-- `ContentType.PRESENTATION` - Presentations (500-1000 words)
-- `ContentType.VIDEO_SCRIPT` - Video scripts
-- `ContentType.CASE_STUDY` - Case studies
-
-## Available Tone Types
-
-- `ToneType.PROFESSIONAL` - Business and professional content
-- `ToneType.CONVERSATIONAL` - Friendly, approachable content
-- `ToneType.TECHNICAL` - Technical documentation
-- `ToneType.EDUCATIONAL` - Teaching and learning content
-- `ToneType.PERSUASIVE` - Marketing and sales content
-- `ToneType.INSPIRATIONAL` - Motivational content
-
-## Supported Workflows
-
-### Single Content Type
-```python
-# Article workflow
-request = WorkflowRequest(
-    request_text="Your topic here",
-    content_types=[ContentType.ARTICLE]
-)
+```bash
+WORDPRESS_URL=https://your-site.com
+WORDPRESS_USERNAME=your_wp_username
+WORDPRESS_APP_PASSWORD=xxxx xxxx xxxx xxxx xxxx xxxx
 ```
 
-### Multi-Platform Campaign
-```python
-# Multiple content types
-request = WorkflowRequest(
-    request_text="Your topic here",
-    content_types=[
-        ContentType.ARTICLE,
-        ContentType.SOCIAL_POST,
-        ContentType.EMAIL
-    ]
-)
+> Create an Application Password at: **WordPress Admin → Users → Profile → Application Passwords**
+
+## 3. Run
+
+### Option A: Full Stack (API + Frontend)
+
+```bash
+# Terminal 1 — FastAPI backend
+source venv/bin/activate
+python -m uvicorn api.main:app --reload --port 8000
+
+# Terminal 2 — React frontend
+cd frontend
+npm install       # First time only
+npm run dev
 ```
 
-## Quality Gates
+- Frontend wizard: <http://localhost:5173>
+- API docs (Swagger): <http://localhost:8000/docs>
 
-All content passes through validation checkpoints:
+### Option B: API only
 
-1. **Research Completeness** - Validates research quality
-   - Minimum 2 sources
-   - At least 1 high-quality source (credibility >= 0.7)
-   - Key findings present
-
-2. **Brief Alignment** - Validates content brief
-   - Target audience defined
-   - At least 1 key message
-   - Structure requirements specified
-   - Valid word count range
-
-3. **Brand Consistency** - Validates brand voice
-   - Score >= 0.7
-   - No avoided terms
-   - Acceptable readability (Flesch >= 60)
-   - Passive voice < 15%
-
-4. **Format Compliance** - Validates output format
-5. **Final Review** - Pre-delivery check
-
-## File Structure
-
-```
-content-creation-engine/
-├── agents/              # Agent implementations
-│   ├── base/           # Base classes
-│   └── orchestrator/   # Workflow orchestration
-├── skills/             # Skill implementations
-│   ├── content-brief/  # Brief creation
-│   └── brand-voice/    # Voice validation
-└── examples/           # Usage examples
+```bash
+source venv/bin/activate
+python -m uvicorn api.main:app --reload --port 8000
 ```
 
-## Next Steps
+### Option C: Python scripts
 
-- Explore `examples/phase1_example.py` for detailed examples
-- Read `CLAUDE.md` for architecture overview
-- Check `README.md` for full documentation
-- Review `PHASE1_COMPLETE.md` for implementation details
+```bash
+python3 mvp_test.py             # Integration test (no API keys needed)
+python3 examples/phase2_endtoend.py
+python3 examples/phase3_production.py
+python3 examples/web_search_example.py
+```
+
+## 4. API Usage
+
+### Submit a workflow
+
+```bash
+curl -X POST http://localhost:8000/api/workflow/execute \
+  -H "Content-Type: application/json" \
+  -d '{
+    "request_text": "Write an article about AI in healthcare",
+    "content_types": ["article"],
+    "output_formats": ["docx", "pdf"]
+  }'
+```
+
+Returns a `job_id`. Poll for status:
+
+```bash
+curl http://localhost:8000/api/workflow/status/{job_id}
+```
+
+Retrieve the result when `status` is `completed`:
+
+```bash
+curl http://localhost:8000/api/workflow/result/{job_id}
+```
+
+Download a generated file:
+
+```bash
+curl -O http://localhost:8000/api/workflow/download/{job_id}/0
+```
+
+### Publish to WordPress
+
+```bash
+curl -X POST http://localhost:8000/api/publish/wordpress \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "My Article",
+    "content": "<h2>Intro</h2><p>Content here...</p>",
+    "content_format": "html",
+    "status": "draft",
+    "category_names": ["Technology"],
+    "tag_names": ["AI", "healthcare"]
+  }'
+```
+
+Verify connection first:
+
+```bash
+curl http://localhost:8000/api/publish/wordpress/verify
+```
+
+## 5. API Endpoints Reference
+
+| Method | Endpoint | Description |
+| ------ | -------- | ----------- |
+| GET | `/api/health` | Health check |
+| GET | `/api/output-formats` | List supported output formats |
+| POST | `/api/workflow/execute` | Submit a content workflow |
+| GET | `/api/workflow/status/{job_id}` | Poll workflow status |
+| GET | `/api/workflow/result/{job_id}` | Get completed result |
+| GET | `/api/workflow/download/{job_id}/{file_id}` | Download generated file |
+| GET | `/api/workflow/jobs` | List all jobs (debug) |
+| GET | `/api/content-types` | List content types |
+| GET | `/api/platforms` | List supported platforms |
+| GET | `/api/templates` | List document templates |
+| GET | `/api/publish/wordpress/verify` | Test WordPress connection |
+| GET | `/api/publish/wordpress/categories` | List WordPress categories |
+| GET | `/api/publish/wordpress/tags` | List WordPress tags |
+| POST | `/api/publish/wordpress` | Publish post to WordPress |
+
+## 6. Content Types & Output Formats
+
+**Content types:** `article`, `blog_post`, `social_post`, `whitepaper`, `email`, `newsletter`, `presentation`, `video_script`, `case_study`
+
+**Output formats:** `markdown`, `html`, `docx`, `pdf`, `pptx`
+
+**Tone types:** `professional`, `conversational`, `technical`, `educational`, `persuasive`, `inspirational`
+
+## 7. Example Scripts
+
+| Script | What it shows |
+| ------ | ------------- |
+| `examples/phase1_example.py` | Orchestrator planning, content brief, brand voice |
+| `examples/phase2_endtoend.py` | Full article + multi-platform campaign workflow |
+| `examples/phase3_production.py` | DOCX, PDF, PPTX document generation |
+| `examples/web_search_example.py` | Real web search with Firecrawl/Serper |
+| `examples/multi_model_example.py` | Switching between Anthropic and OpenAI models |
 
 ## Need Help?
 
-- See full documentation in `README.md`
-- Review architecture in `CLAUDE.md`
-- Check agent docs in `agents/*/AGENT.md`
-- Check skill docs in `skills/*/SKILL.md`
-
-## Phase 2 Preview
-
-Coming next:
-- Research Agent with web search
-- Creation Agent for content generation
-- End-to-end workflow execution
-- Automated testing framework
+- Architecture overview: `CLAUDE.md`
+- Full documentation: `README.md`
+- Agent docs: `agents/*/AGENT.md`
+- Skill docs: `skills/*/SKILL.md`
+- API reference (interactive): <http://localhost:8000/docs>
