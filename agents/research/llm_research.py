@@ -192,6 +192,7 @@ Be specific and actionable in your recommendations.""",
         Args:
             input_data: Dictionary with:
                 - topic: Research topic (required)
+                - source_urls: Optional list of URLs to scrape as primary sources
                 - requirements: Optional requirements dict with:
                     - focus_areas: List of specific areas to research
                     - recent_only: Boolean for recency filter
@@ -206,19 +207,35 @@ Be specific and actionable in your recommendations.""",
             raise ValueError("Topic is required for research")
 
         requirements = input_data.get("requirements", {})
+        source_urls = input_data.get("source_urls") or []
 
         self.logger.info(f"Starting LLM-powered research on topic: {topic}")
 
-        # Step 1: Optimize search queries using LLM
+        # Step 1: Scrape any explicitly provided URLs first (highest priority sources)
+        url_results = []
+        if source_urls:
+            self.logger.info(f"Scraping {len(source_urls)} provided source URLs")
+            url_results = await self._scrape_source_urls(source_urls)
+            self.logger.info(f"Scraped {len(url_results)} source URLs successfully")
+
+        # Step 2: Optimize search queries using LLM
         optimized_queries = await self._optimize_queries(topic, requirements)
         self.logger.info(f"Generated {len(optimized_queries)} optimized queries")
 
-        # Step 2: Execute searches (mock for now, real integration later)
-        search_results = await self._execute_search(topic, optimized_queries)
-        self.logger.info(f"Found {len(search_results)} search results")
+        # Step 3: Execute web search (skipped if URLs were provided and search is disabled)
+        search_results = []
+        if not source_urls or self.enable_web_search:
+            search_results = await self._execute_search(topic, optimized_queries)
+            self.logger.info(f"Found {len(search_results)} search results")
 
-        # Step 3: Analyze sources using LLM
-        analyzed_sources = await self._analyze_sources(search_results, topic)
+        # Merge: scraped URLs take precedence, then search results (deduplicated)
+        seen_urls = {r["url"] for r in url_results}
+        deduped_search = [r for r in search_results if r.get("url") not in seen_urls]
+        all_results = url_results + deduped_search
+        self.logger.info(f"Total sources for analysis: {len(all_results)}")
+
+        # Step 4: Analyze sources using LLM
+        analyzed_sources = await self._analyze_sources(all_results, topic)
         self.logger.info(f"Analyzed {len(analyzed_sources)} sources")
 
         # Filter by credibility
@@ -258,7 +275,8 @@ Be specific and actionable in your recommendations.""",
             input_data,
             research_brief,
             {
-                "total_sources": len(search_results),
+                "total_sources": len(all_results),
+                "url_sources": len(url_results),
                 "quality_sources": len(quality_sources),
                 "key_findings_count": len(key_findings),
                 "model": self._get_model_config().model,
@@ -369,6 +387,81 @@ Output as a JSON array of strings, like: ["query 1", "query 2", "query 3"]"""
                 self._search_provider = None
 
         return self._search_provider
+
+    async def _scrape_source_urls(
+        self, urls: List[str]
+    ) -> List[Dict[str, Any]]:
+        """
+        Scrape content from explicitly provided URLs.
+
+        Uses the Firecrawl provider's scrape_url() for clean markdown
+        extraction when available. Falls back to a basic httpx fetch
+        with minimal HTML stripping otherwise.
+
+        Scraped results are given a high credibility score (0.9) so they
+        are prioritised over search results during source analysis.
+
+        Args:
+            urls: List of URLs to scrape
+
+        Returns:
+            List of result dicts compatible with _analyze_sources()
+        """
+        results = []
+        provider = self._get_search_provider()
+        use_firecrawl = provider and provider.name == "firecrawl"
+
+        for url in urls:
+            try:
+                content = None
+                title = url  # fallback title
+
+                if use_firecrawl:
+                    scraped = await provider.scrape_url(url, formats=["markdown"])
+                    content = scraped.get("markdown") or scraped.get("content", "")
+                    title = scraped.get("metadata", {}).get("title", url)
+                else:
+                    content, title = await self._basic_fetch(url)
+
+                if not content:
+                    self.logger.warning(f"No content scraped from {url}")
+                    continue
+
+                results.append({
+                    "url": url,
+                    "title": title,
+                    "content": content[:4000],  # cap per-source content
+                    "author": None,
+                    "published_date": None,
+                    "source": url,
+                    "_is_provided_url": True,  # flag for credibility boost
+                })
+                self.logger.info(f"Scraped {len(content)} chars from {url}")
+
+            except Exception as e:
+                self.logger.warning(f"Failed to scrape {url}: {e}")
+
+        return results
+
+    async def _basic_fetch(self, url: str):
+        """Fetch URL content with httpx and strip HTML tags."""
+        import re as _re
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+                resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+                resp.raise_for_status()
+                html = resp.text
+                # Extract title
+                title_match = _re.search(r"<title[^>]*>([^<]+)</title>", html, _re.I)
+                title = title_match.group(1).strip() if title_match else url
+                # Strip tags and compress whitespace
+                text = _re.sub(r"<[^>]+>", " ", html)
+                text = _re.sub(r"\s+", " ", text).strip()
+                return text[:4000], title
+        except Exception as e:
+            self.logger.warning(f"Basic fetch failed for {url}: {e}")
+            return None, url
 
     async def _execute_search(
         self, topic: str, queries: List[str]
@@ -605,12 +698,17 @@ pilot programs before full rollout, and continuous optimization cycles.""",
             # Use LLM to analyze each source
             analysis = await self._analyze_single_source(result, topic, model_config)
 
+            # Provided URLs get a credibility floor of 0.9 — the user chose them
+            credibility = analysis.get("credibility_score", 0.5)
+            if result.get("_is_provided_url"):
+                credibility = max(credibility, 0.9)
+
             source = Source(
                 url=result.get("url", ""),
                 title=result.get("title", ""),
                 author=result.get("author"),
                 publication_date=result.get("published_date"),
-                credibility_score=analysis.get("credibility_score", 0.5),
+                credibility_score=credibility,
                 key_quotes=analysis.get("key_quotes", []),
                 key_facts=analysis.get("key_facts", []),
             )

@@ -73,6 +73,10 @@ class WorkflowService:
                 "emoji_density": schema.social_settings.emoji_density,
             }
 
+        # Pass source URLs for URL-based research
+        if schema.source_urls:
+            additional_context["source_urls"] = [str(u) for u in schema.source_urls]
+
         return WorkflowRequest(
             request_text=schema.request_text,
             content_types=content_types,

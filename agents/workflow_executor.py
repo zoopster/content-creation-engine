@@ -149,7 +149,8 @@ class WorkflowExecutor:
 
         # Step 1: Research
         self.logger.info("Step 1/5: Research")
-        research_brief = self._execute_research(request.request_text, result)
+        source_urls = request.additional_context.get("source_urls")
+        research_brief = self._execute_research(request.request_text, result, source_urls)
         result.outputs["research_brief"] = research_brief
 
         # Step 2: Content Brief
@@ -187,7 +188,8 @@ class WorkflowExecutor:
 
         # Step 1: Research (shared)
         self.logger.info("Step 1: Research (shared)")
-        research_brief = self._execute_research(request.request_text, result)
+        source_urls = request.additional_context.get("source_urls")
+        research_brief = self._execute_research(request.request_text, result, source_urls)
         result.outputs["research_brief"] = research_brief
 
         # Step 2: Content Briefs (one per platform)
@@ -263,10 +265,18 @@ class WorkflowExecutor:
         # Similar to article but for presentation format
         self._execute_article_workflow(request, execution_plan, result)
 
-    def _execute_research(self, topic: str, result: WorkflowExecutionResult) -> ResearchBrief:
+    def _execute_research(
+        self,
+        topic: str,
+        result: WorkflowExecutionResult,
+        source_urls: Optional[List[str]] = None,
+    ) -> ResearchBrief:
         """Execute research step with quality gate."""
         try:
-            research_brief = self.research_agent.process({"topic": topic})
+            input_data = {"topic": topic}
+            if source_urls:
+                input_data["source_urls"] = source_urls
+            research_brief = self.research_agent.process(input_data)
 
             # Quality Gate 1: Research Completeness
             if self.enforce_quality_gates:

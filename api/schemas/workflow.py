@@ -1,6 +1,6 @@
 """Workflow API schemas."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, AnyHttpUrl
 from typing import List, Optional, Dict, Any
 from enum import Enum
 from datetime import datetime
@@ -91,6 +91,11 @@ class WorkflowRequestSchema(BaseModel):
         ...,
         min_length=1,
         description="Selected content types"
+    )
+    source_urls: Optional[List[AnyHttpUrl]] = Field(
+        default=None,
+        max_length=10,
+        description="URLs to scrape as primary source material (up to 10)"
     )
     priority: PriorityEnum = Field(
         default=PriorityEnum.NORMAL,
