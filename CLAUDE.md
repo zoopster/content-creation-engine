@@ -1,142 +1,188 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+# CLAUDE.md - Content Creation Engine
 
 ## Project Overview
 
-The Content Creation Engine is a multi-agent system designed to orchestrate content production across formats (articles, social posts, presentations, videos, newsletters). The system uses specialized agents that handle research, writing, editing, formatting, and distribution.
+**Name:** Content Creation Engine (CCE)
+**Type:** Multi-agent content production system with REST API and React frontend
+**Status:** Active Development (Phases 1-3 Complete)
 
-## Architecture
+A modular system that orchestrates AI agents to research, write, and produce content across multiple formats (articles, social posts, presentations, documents).
 
-### Agent System
+## Tech Stack
 
-The system follows a four-agent architecture:
+### Backend (Python)
+- **Framework:** FastAPI with Uvicorn
+- **Python:** 3.8+ (venv in `./venv`)
+- **LLM Providers:** Anthropic Claude, OpenAI GPT
+- **Document Generation:** python-docx, python-pptx, reportlab
+- **Web Search:** Firecrawl, aiohttp (for Serper API)
 
-1. **Orchestrator Agent** (`agents/orchestrator/`): Central coordinator that routes requests, manages workflow state, and assembles final deliverables
-2. **Research Agent** (`agents/research/`): Gathers and validates source material, produces structured research briefs
-3. **Creation Agent** (`agents/creation/`): Generates written content using research inputs and brand guidelines
-4. **Production Agent** (`agents/production/`): Transforms content into final formats (DOCX, PPTX, PDF) with templates
+### Frontend (TypeScript)
+- **Framework:** React 18 with Vite
+- **State:** Zustand
+- **Styling:** Tailwind CSS
+- **HTTP Client:** Axios
 
-### Skill System
+## Common Commands
 
-Skills are modular capabilities invoked by agents:
+```bash
+# Backend - activate venv first
+source venv/bin/activate        # macOS/Linux
+.\venv\Scripts\activate         # Windows
 
-- **Research Skills**: `web-search`, `source-eval`, `fact-check`, `data-pull`
-- **Creation Skills**: `long-form`, `short-form`, `social`, `script`, `email`
-- **Production Skills**: `docx`, `pptx`, `pdf`, `image-gen`, `video-gen`
-- **Cross-cutting Skills**: `content-brief`, `brand-voice`, `content-repurpose`
+# Run API server (from project root)
+uvicorn api.main:app --reload --port 8000
 
-Each skill lives in `skills/<skill-name>/` with structure:
+# Run tests
+pytest tests/
+python mvp_test.py              # Integration test
+
+# Frontend (from frontend/ directory)
+cd frontend
+npm run dev                     # Dev server on :5173
+npm run build                   # Production build
+npm run lint                    # ESLint check
 ```
-<skill-name>/
-├── SKILL.md              # Documentation and usage
-├── references/           # Guidelines and examples
-├── assets/              # Templates and resources
-└── scripts/             # Implementation code
-```
 
-### Workflow System
-
-Workflows define agent coordination patterns:
-- **Article Production**: Research → Creation → Production (sequential)
-- **Multi-Platform Campaign**: Research → parallel Creation tracks → Production
-- **Presentation from Research**: Research + Production (template) → Creation → Production
-
-Workflows are defined in `workflows/*.yaml` files.
-
-## Key Design Principles
-
-### Agent Handoffs
-
-Agents communicate through structured data formats:
-- Research Agent outputs: Research Brief (JSON)
-- Creation Agent outputs: Draft content (Markdown)
-- Production Agent outputs: Final documents (format-specific)
-
-Each handoff includes validation checkpoints (Quality Gates).
-
-### Quality Gates
-
-Validation happens at five checkpoints:
-1. Research Completeness (after Research Agent)
-2. Brief Alignment (after content-brief skill)
-3. Brand Consistency (after Creation Agent)
-4. Format Compliance (after Production Agent)
-5. Final Review (before delivery)
-
-### Brand Voice System
-
-The `brand-voice` skill ensures consistency through:
-- Vocabulary alignment (preferred/avoided terms)
-- Sentence structure patterns
-- Tone calibration per content type
-- Style validation scripts
-
-## Implementation Status
-
-This is a greenfield project. The architecture is defined in `content-creation-engine-plan.md` but no code has been implemented yet.
-
-### Implementation Order (from plan)
-
-1. **Phase 1**: Orchestrator routing, `content-brief` and `brand-voice` skills, agent handoff protocol
-2. **Phase 2**: `long-form-writing` and `social-content` skills, Research Agent with web search
-3. **Phase 3**: Production Agent with `docx`/`pptx`/`pdf` skills, template system
-4. **Phase 4**: `content-repurpose` skill, parallel processing, email generation
-5. **Phase 5**: Quality gate automation, performance optimization, error handling
-
-## File Structure
+## Project Structure
 
 ```
 content-creation-engine/
-├── agents/
-│   ├── orchestrator/
-│   ├── research/
-│   ├── creation/
-│   └── production/
-├── skills/
-│   ├── content-brief/
-│   ├── brand-voice/
-│   ├── long-form-writing/
-│   ├── social-content/
-│   ├── content-repurpose/
-│   └── (docx, pptx, pdf, etc.)
-├── workflows/
-│   ├── article-production.yaml
-│   ├── multi-platform-campaign.yaml
-│   └── presentation-from-research.yaml
-└── templates/
-    ├── briefs/
-    ├── documents/
-    └── presentations/
+├── agents/                     # AI Agent implementations
+│   ├── orchestrator/           # Routes requests, manages workflow
+│   ├── research/               # Gathers and validates sources
+│   ├── creation/               # Generates written content
+│   ├── production/             # Produces final documents
+│   └── workflow_executor.py    # Runs multi-agent workflows
+├── skills/                     # Modular agent capabilities
+│   ├── content_brief/          # Brief generation
+│   ├── brand_voice/            # Voice/tone consistency
+│   ├── long_form_writing/      # Articles, blog posts
+│   ├── social_content/         # Social media posts
+│   ├── docx_generation/        # Word documents
+│   ├── pptx_generation/        # PowerPoint slides
+│   ├── pdf_generation/         # PDF output
+│   └── content_repurpose/      # Format transformations
+├── api/                        # FastAPI REST API
+│   ├── main.py                 # App entry point
+│   ├── config.py               # Settings
+│   ├── routers/                # API endpoints
+│   ├── schemas/                # Pydantic models
+│   └── services/               # Business logic
+├── frontend/                   # React SPA
+│   └── src/
+│       ├── components/         # UI components
+│       ├── api/                # API client
+│       ├── store/              # Zustand state
+│       └── hooks/              # Custom hooks
+├── templates/                  # Document templates
+│   └── brand/                  # Brand configuration
+├── output/                     # Generated content (gitignored)
+├── examples/                   # Usage examples
+└── tests/                      # Test suite
 ```
 
-## Content Transformation Matrix
+## Architecture
 
-When implementing `content-repurpose` skill, follow these transformations:
+### Agent Pipeline
+```
+Orchestrator → Research Agent → Creation Agent → Production Agent
+     ↓              ↓                ↓                ↓
+  Routing      Web Search       Long-form         DOCX/PPTX/PDF
+              Source Eval      Social Content    Template System
+```
 
-| Source Format | Target: Article | Target: Social | Target: Presentation | Target: Email |
-|--------------|-----------------|----------------|---------------------|---------------|
-| Research Brief | Full draft | Key stats | Slide deck | Summary |
-| Long Article | N/A | Thread | Key points | Teaser |
-| Webinar | Recap | Quotes | N/A | Follow-up |
-| Case Study | Blog post | Results | Sales deck | Nurture |
+### Agent Handoffs
+- **Research → Creation:** JSON Research Brief
+- **Creation → Production:** Markdown content
+- **Production → Output:** Final documents (DOCX, PPTX, PDF)
 
-## Platform-Specific Requirements
+### Quality Gates (5 Checkpoints)
+1. Research Completeness
+2. Brief Alignment
+3. Brand Consistency
+4. Format Compliance
+5. Final Review
 
-### Social Content Specifications
+## API Endpoints
 
-| Platform | Max Length | Media Support | Hashtag Strategy |
-|----------|-----------|---------------|------------------|
-| LinkedIn | 3,000 chars | Image, PDF, Video | 3-5 professional |
-| X/Twitter | 280 chars | Image, Video, GIF | 1-2 relevant |
-| Instagram | 2,200 chars | Image required | 5-15 mixed |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/health` | Health check |
+| GET | `/api/output-formats` | List supported formats |
+| POST | `/api/workflow/execute` | Run content workflow |
+| GET | `/api/templates` | List templates |
+| GET | `/api/content-types` | List content types |
+| GET | `/api/platforms` | List platforms |
 
-Reference: `skills/social-content/references/platform-specs.md` (when created)
+## Environment Variables
 
-## Prerequisites for Implementation
+Copy `.env.example` to `.env` and configure:
 
-Before beginning implementation:
-1. Define brand voice parameters for `brand-voice` skill
-2. Specify priority content types/formats
-3. Provide template examples for documents and presentations
-4. Identify third-party integration points (CMS, social platforms, email tools)
+```bash
+ANTHROPIC_API_KEY=sk-ant-...     # Required for Claude
+OPENAI_API_KEY=sk-...            # Optional for GPT
+FIRECRAWL_API_KEY=fc-...         # For web search
+SERPER_API_KEY=...               # Alternative search
+```
+
+## Implementation Status
+
+| Phase | Status | Description |
+|-------|--------|-------------|
+| Phase 1 | Complete | Orchestrator, content-brief, brand-voice, handoff protocol |
+| Phase 2 | Complete | long-form-writing, social-content, Research Agent |
+| Phase 3 | Complete | Production Agent, DOCX/PPTX/PDF skills, template system |
+| Phase 4 | Pending | content-repurpose, parallel processing, email generation |
+| Phase 5 | Pending | Quality gate automation, performance optimization |
+
+## Coding Standards
+
+- Use **4 spaces** for indentation (Python & TypeScript)
+- Python: Follow PEP 8, type hints required
+- TypeScript: Strict mode, prefer `interface` over `type`
+- All agents/skills must have `__init__.py` exports
+- Document public functions with docstrings
+
+## Things to Avoid
+
+- Don't modify files in `venv/` or `node_modules/`
+- Don't commit `.env` files (use `.env.example`)
+- Don't hardcode API keys
+- Don't put generated content in git (use `output/`)
+- Avoid synchronous API calls in agents (use async)
+
+## Testing
+
+```bash
+# Quick integration test
+python mvp_test.py
+
+# Full test suite
+pytest tests/ -v
+
+# Phase 3 specific tests
+pytest tests/test_phase3_quick.py
+```
+
+## Key Files to Read First
+
+1. `api/main.py` - API entry point and routes
+2. `agents/orchestrator/orchestrator.py` - Workflow coordination
+3. `agents/workflow_executor.py` - Multi-agent execution
+4. `skills/long_form_writing/long_form_writing.py` - Content generation pattern
+
+## Recent Work / Current Focus
+
+<!-- Update this section as you work on the project -->
+- Phases 1-3 complete with working document generation
+- Frontend UI connected to API
+- Next: Phase 4 content repurposing and parallel workflows
+
+## Platform Specs Reference
+
+| Platform | Max Length | Media | Hashtags |
+|----------|-----------|-------|----------|
+| LinkedIn | 3,000 chars | Image, PDF, Video | 3-5 |
+| X/Twitter | 280 chars | Image, Video, GIF | 1-2 |
+| Instagram | 2,200 chars | Image required | 5-15 |
