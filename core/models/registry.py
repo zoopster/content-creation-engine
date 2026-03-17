@@ -89,7 +89,7 @@ class ModelRegistry:
         ),
         "creation": AgentModelConfig(
             provider="anthropic",
-            model="claude-sonnet-4-20250514",  # Balanced for creative writing
+            model="claude-sonnet-4-6",  # Balanced for creative writing
             config=GenerationConfig(
                 max_tokens=8192,
                 temperature=0.7,  # Higher temperature for creativity
@@ -97,7 +97,7 @@ class ModelRegistry:
         ),
         "editing": AgentModelConfig(
             provider="anthropic",
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             config=GenerationConfig(
                 max_tokens=4096,
                 temperature=0.3,  # Lower for precise editing
@@ -180,7 +180,7 @@ class ModelRegistry:
         # Ultimate fallback
         return AgentModelConfig(
             provider="anthropic",
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
         )
 
     async def generate(

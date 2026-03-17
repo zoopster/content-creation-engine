@@ -25,7 +25,7 @@ from .base import (
 # Available Claude models with their specifications
 ANTHROPIC_MODELS = [
     ModelInfo(
-        id="claude-sonnet-4-20250514",
+        id="claude-sonnet-4-6",
         provider="anthropic",
         display_name="Claude Sonnet 4",
         max_tokens=8192,
@@ -124,8 +124,8 @@ ANTHROPIC_MODELS = [
 
 # Model aliases for convenience
 MODEL_ALIASES = {
-    "claude-sonnet": "claude-sonnet-4-20250514",
-    "claude-sonnet-4": "claude-sonnet-4-20250514",
+    "claude-sonnet": "claude-sonnet-4-6",
+    "claude-sonnet-4": "claude-sonnet-4-6",
     "claude-opus": "claude-opus-4-20250514",
     "claude-opus-4": "claude-opus-4-20250514",
     "claude-3.5-sonnet": "claude-3-5-sonnet-20241022",

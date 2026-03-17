@@ -77,7 +77,7 @@ Edit `.env` with your actual values. The minimum required configuration depends 
 ```bash
 ANTHROPIC_API_KEY=sk-ant-...
 DEFAULT_PROVIDER=anthropic
-DEFAULT_MODEL=claude-sonnet-4-20250514
+DEFAULT_MODEL=claude-sonnet-4-6
 ENABLE_WEB_SEARCH=false
 ```
 
@@ -87,7 +87,7 @@ ENABLE_WEB_SEARCH=false
 # LLM
 ANTHROPIC_API_KEY=sk-ant-...
 DEFAULT_PROVIDER=anthropic
-DEFAULT_MODEL=claude-sonnet-4-20250514
+DEFAULT_MODEL=claude-sonnet-4-6
 
 # Web search (enables real research and URL scraping)
 ENABLE_WEB_SEARCH=true
@@ -124,7 +124,7 @@ To use a different model per agent, set in `.env`:
 
 ```bash
 DEFAULT_PROVIDER=anthropic
-DEFAULT_MODEL=claude-sonnet-4-20250514   # Best quality
+DEFAULT_MODEL=claude-sonnet-4-6   # Best quality
 # DEFAULT_MODEL=claude-3-5-haiku-20241022  # Faster, cheaper
 ```
 
@@ -630,7 +630,7 @@ kill -9 <PID>
 | `ANTHROPIC_API_KEY`       | —                           | Required for Claude            |
 | `OPENAI_API_KEY`          | —                           | Optional, for GPT              |
 | `DEFAULT_PROVIDER`        | `anthropic`                 | LLM provider                   |
-| `DEFAULT_MODEL`           | `claude-sonnet-4-20250514`  | Model ID                       |
+| `DEFAULT_MODEL`           | `claude-sonnet-4-6`  | Model ID                       |
 | `ENABLE_WEB_SEARCH`       | `false`                     | Enable real research           |
 | `FIRECRAWL_API_KEY`       | —                           | Web search + URL scraping      |
 | `WORDPRESS_URL`           | —                           | WordPress site URL             |

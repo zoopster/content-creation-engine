@@ -31,7 +31,7 @@ Open `.env` and set at minimum:
 ```bash
 ANTHROPIC_API_KEY=sk-ant-...    # Required — or use OPENAI_API_KEY
 DEFAULT_PROVIDER=anthropic
-DEFAULT_MODEL=claude-sonnet-4-20250514
+DEFAULT_MODEL=claude-sonnet-4-6
 ```
 
 **Optional — enable real web search:**

@@ -20,7 +20,7 @@ DEFAULT_MODEL_CONFIG = {
     "providers": {
         "anthropic": {
             "enabled": True,
-            "default_model": "claude-sonnet-4-20250514",
+            "default_model": "claude-sonnet-4-6",
             "timeout": 60,
             "max_retries": 2,
         },
@@ -46,7 +46,7 @@ DEFAULT_MODEL_CONFIG = {
         },
         "creation": {
             "provider": "anthropic",
-            "model": "claude-sonnet-4-20250514",
+            "model": "claude-sonnet-4-6",
             "config": {
                 "max_tokens": 8192,
                 "temperature": 0.7,
@@ -72,7 +72,7 @@ DEFAULT_MODEL_CONFIG = {
         },
         "editing": {
             "provider": "anthropic",
-            "model": "claude-sonnet-4-20250514",
+            "model": "claude-sonnet-4-6",
             "config": {
                 "max_tokens": 4096,
                 "temperature": 0.3,
@@ -86,7 +86,7 @@ DEFAULT_MODEL_CONFIG = {
     },
     "defaults": {
         "provider": "anthropic",
-        "model": "claude-sonnet-4-20250514",
+        "model": "claude-sonnet-4-6",
         "temperature": 0.7,
         "max_tokens": 4096,
     },
@@ -175,7 +175,7 @@ class ModelConfigManager:
             defaults = self._config.get("defaults", {})
             return AgentModelConfig(
                 provider=defaults.get("provider", "anthropic"),
-                model=defaults.get("model", "claude-sonnet-4-20250514"),
+                model=defaults.get("model", "claude-sonnet-4-6"),
                 config=GenerationConfig(
                     max_tokens=defaults.get("max_tokens", 4096),
                     temperature=defaults.get("temperature", 0.7),

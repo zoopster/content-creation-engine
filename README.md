@@ -140,7 +140,7 @@ OPENAI_API_KEY=your_openai_api_key_here
 
 # Optional: Choose default provider
 DEFAULT_PROVIDER=anthropic  # or openai
-DEFAULT_MODEL=claude-sonnet-4-20250514  # or gpt-4o
+DEFAULT_MODEL=claude-sonnet-4-6  # or gpt-4o
 ```
 
 See [.env.example](.env.example) for complete configuration options.
@@ -403,7 +403,7 @@ OPENAI_API_KEY=sk-proj-...
 
 # Provider Selection
 DEFAULT_PROVIDER=anthropic
-DEFAULT_MODEL=claude-sonnet-4-20250514
+DEFAULT_MODEL=claude-sonnet-4-6
 
 # Web Search (optional - enables real research)
 ENABLE_WEB_SEARCH=true
