@@ -216,6 +216,8 @@ class EmailGenerationSkill(Skill):
         messages = [Message(role="user", content=prompt)]
 
         try:
+            if model_config is None:
+                raise RuntimeError("No LLM provider configured for email generation")
             result = await self.registry.generate_chat(
                 messages=messages,
                 provider=model_config.provider,

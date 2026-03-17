@@ -160,8 +160,9 @@ class WorkflowExecutor:
             if workflow_type == WorkflowType.ARTICLE_PRODUCTION:
                 self._execute_article_workflow(request, execution_plan, result)
             elif workflow_type == WorkflowType.MULTI_PLATFORM_CAMPAIGN:
-                # Run parallel creation via asyncio
-                asyncio.run(self._execute_multi_platform_workflow_async(request, execution_plan, result))
+                # Already running inside run_in_executor (no event loop in this
+                # thread), so asyncio.run() is safe here.
+                asyncio.run(self._execute_multi_platform_workflow_async(request, execution_plan, result))  # noqa: ASYNC110
             elif workflow_type == WorkflowType.SOCIAL_ONLY:
                 self._execute_social_workflow(request, execution_plan, result)
             elif workflow_type == WorkflowType.EMAIL_SEQUENCE:
@@ -240,22 +241,22 @@ class WorkflowExecutor:
         draft_tasks = [self._execute_creation_async(brief, result) for brief in briefs]
         drafts = await asyncio.gather(*draft_tasks, return_exceptions=True)
 
-        # Filter out exceptions and log them
-        valid_drafts = []
+        # Filter out exceptions, keeping brief↔draft correspondence
+        valid_pairs: list[tuple] = []
         for i, draft in enumerate(drafts):
             if isinstance(draft, Exception):
                 self.logger.error(f"Draft {i} failed: {draft}")
                 result.add_step(f"creation_{i}", None, False, str(draft))
             else:
-                valid_drafts.append(draft)
-        drafts = valid_drafts
+                valid_pairs.append((briefs[i], draft))
+        drafts = [d for _, d in valid_pairs]
         result.outputs["drafts"] = drafts
 
         # Step 4: Brand Voice (parallel)
         self.logger.info("Step 4: Brand Voice Validation (parallel)")
         bv_tasks = [
-            self._execute_brand_voice_async(draft, briefs[0].tone, result)
-            for draft in drafts
+            self._execute_brand_voice_async(draft, brief.tone, result)
+            for brief, draft in valid_pairs
         ]
         brand_results = await asyncio.gather(*bv_tasks, return_exceptions=True)
         result.outputs["brand_voice_results"] = [r for r in brand_results if not isinstance(r, Exception)]
@@ -438,7 +439,7 @@ class WorkflowExecutor:
         result: WorkflowExecutionResult
     ) -> DraftContent:
         """Async wrapper for content creation (runs sync in thread pool)."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None, self._execute_creation, content_brief, result
         )
@@ -479,7 +480,7 @@ class WorkflowExecutor:
         result: WorkflowExecutionResult
     ) -> BrandVoiceResult:
         """Async wrapper for brand voice validation."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None, self._execute_brand_voice, draft, target_tone, result
         )
@@ -518,7 +519,7 @@ class WorkflowExecutor:
         template_override: Optional[str] = None
     ):
         """Async wrapper for production."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None, self._execute_production, draft, output_format, result, template_override
         )
@@ -557,7 +558,7 @@ class WorkflowExecutor:
         template_override: Optional[str] = None
     ):
         """Async wrapper for batch production."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None, self._produce_multiple_formats, draft, formats, result, template_override
         )

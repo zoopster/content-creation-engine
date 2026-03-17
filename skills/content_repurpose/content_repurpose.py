@@ -161,17 +161,16 @@ class ContentRepurposeSkill(Skill):
         source_type = self._detect_source_type(source_content)
         self.logger.info(f"Repurposing {source_type.value} → {target_format.value}")
 
-        # Determine transformation key
-        transform_key = (source_type, target_format)
-        transform_name = self.TRANSFORMATION_MAP.get(transform_key)
-
-        if not transform_name:
-            # Try research-based fallbacks
-            if isinstance(source_content, ResearchBrief):
-                if target_format == ContentType.ARTICLE:
-                    transform_name = "research_to_article"
-                elif target_format == ContentType.EMAIL:
-                    transform_name = "research_to_email"
+        # ResearchBrief has its own transformation paths
+        if isinstance(source_content, ResearchBrief):
+            if target_format == ContentType.ARTICLE:
+                transform_name = "research_to_article"
+            elif target_format == ContentType.EMAIL:
+                transform_name = "research_to_email"
+            else:
+                transform_name = None
+        else:
+            transform_name = self.TRANSFORMATION_MAP.get((source_type, target_format))
 
         if not transform_name:
             supported = [f"{s.value}→{t.value}" for s, t in self.TRANSFORMATION_MAP.keys()]
@@ -228,6 +227,9 @@ class ContentRepurposeSkill(Skill):
         user_prompt = self._build_user_prompt(
             transform_name, source_text, target_format, platform, platform_guide, additional_context
         )
+
+        if model_config is None:
+            raise RuntimeError("No LLM provider configured for content repurposing")
 
         gen_config = GenerationConfig(
             max_tokens=model_config.config.max_tokens if model_config.config else 2048,

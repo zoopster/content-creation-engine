@@ -112,7 +112,7 @@ class WorkflowService:
 
             # Execute workflow in a thread pool so that the sync executor's
             # internal asyncio.run() calls don't collide with FastAPI's event loop.
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             result = await loop.run_in_executor(None, executor.execute, workflow_request)
 
             # Update progress based on steps completed
