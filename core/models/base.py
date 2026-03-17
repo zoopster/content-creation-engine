@@ -46,18 +46,20 @@ class GenerationConfig:
     """Configuration for text generation."""
     max_tokens: int = 4096
     temperature: float = 0.7
-    top_p: float = 1.0
+    top_p: Optional[float] = None  # None means "use provider default"
     stop_sequences: list[str] = field(default_factory=list)
     system_prompt: Optional[str] = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d: dict[str, Any] = {
             "max_tokens": self.max_tokens,
             "temperature": self.temperature,
-            "top_p": self.top_p,
             "stop_sequences": self.stop_sequences,
             "system_prompt": self.system_prompt,
         }
+        if self.top_p is not None:
+            d["top_p"] = self.top_p
+        return d
 
 
 @dataclass

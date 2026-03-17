@@ -270,9 +270,9 @@ class AnthropicProvider(ModelProvider):
                 "temperature": config.temperature,
             }
 
-            # Anthropic rejects requests that specify both temperature and top_p,
-            # so only include top_p when temperature is not being used.
-            if config.temperature == 1.0 and config.top_p != 1.0:
+            # Only include top_p when explicitly set; Anthropic rejects
+            # requests that specify both temperature and top_p.
+            if config.top_p is not None:
                 kwargs["top_p"] = config.top_p
 
             if system_prompt:

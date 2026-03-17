@@ -216,12 +216,11 @@ class EmailGenerationSkill(Skill):
         messages = [Message(role="user", content=prompt)]
 
         try:
-            result = await self.registry.generate(
+            result = await self.registry.generate_chat(
                 messages=messages,
+                provider=model_config.provider,
+                model=model_config.model,
                 config=gen_config,
-                agent_type="creation",
-                provider=model_config.provider if model_config else None,
-                model=model_config.model if model_config else None,
             )
             return self._parse_llm_output(result.content, email_type)
         except Exception as e:
