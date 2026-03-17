@@ -114,6 +114,11 @@ Orchestrator → Research Agent → Creation Agent → Production Agent
 | GET | `/api/templates` | List templates |
 | GET | `/api/content-types` | List content types |
 | GET | `/api/platforms` | List platforms |
+| GET | `/api/repurpose/formats` | List repurpose transformations |
+| POST | `/api/repurpose` | Repurpose content to new format |
+| POST | `/api/repurpose/email` | Generate email from topic |
+| GET | `/api/publish/wordpress/verify` | Verify WordPress connection |
+| POST | `/api/publish/wordpress` | Publish content to WordPress |
 
 ## Environment Variables
 
@@ -133,7 +138,7 @@ SERPER_API_KEY=...               # Alternative search
 | Phase 1 | Complete | Orchestrator, content-brief, brand-voice, handoff protocol |
 | Phase 2 | Complete | long-form-writing, social-content, Research Agent |
 | Phase 3 | Complete | Production Agent, DOCX/PPTX/PDF skills, template system |
-| Phase 4 | Pending | content-repurpose, parallel processing, email generation |
+| Phase 4 | Complete | content-repurpose (LLM), email-generation skill, parallel workflows, repurpose API |
 | Phase 5 | Pending | Quality gate automation, performance optimization |
 
 ## Coding Standards
@@ -174,10 +179,9 @@ pytest tests/test_phase3_quick.py
 
 ## Recent Work / Current Focus
 
-<!-- Update this section as you work on the project -->
-- Phases 1-3 complete with working document generation
-- Frontend UI connected to API
-- Next: Phase 4 content repurposing and parallel workflows
+- Phases 1-4 complete
+- Phase 4 added: LLM-powered content repurposing, email generation skill, parallel multi-platform workflows, repurpose API endpoints (`/api/repurpose`, `/api/repurpose/email`), WordPress publish integration
+- Next: Phase 5 quality gate automation and performance optimization
 
 ## Platform Specs Reference
 
