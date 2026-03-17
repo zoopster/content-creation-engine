@@ -3,6 +3,11 @@
 import os
 from typing import List
 
+from dotenv import load_dotenv
+
+# Load .env before reading any environment variables
+load_dotenv()
+
 
 def _parse_cors_origins(raw: str) -> List[str]:
     """Parse a comma-separated CORS origins string into a list."""
