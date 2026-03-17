@@ -2,6 +2,7 @@
 
 from typing import Dict, Any, Optional
 from datetime import datetime
+import asyncio
 import logging
 import os
 
@@ -109,8 +110,10 @@ class WorkflowService:
             jobs[job_id]["progress"] = 20
             self._add_step_progress(jobs[job_id], "conversion", "completed")
 
-            # Execute workflow (synchronous in current implementation)
-            result = executor.execute(workflow_request)
+            # Execute workflow in a thread pool so that the sync executor's
+            # internal asyncio.run() calls don't collide with FastAPI's event loop.
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(None, executor.execute, workflow_request)
 
             # Update progress based on steps completed
             total_steps = len(result.steps_completed)
