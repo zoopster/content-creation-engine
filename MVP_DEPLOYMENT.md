@@ -14,8 +14,9 @@
 5. [Core Workflows](#5-core-workflows)
 6. [WordPress Publishing](#6-wordpress-publishing)
 7. [URL Input Mode](#7-url-input-mode)
-8. [Production Hardening](#8-production-hardening)
-9. [Troubleshooting](#9-troubleshooting)
+8. [VPS / Cloud Deployment](#8-vps--cloud-deployment-lightsail-ec2-etc)
+9. [Production Hardening](#9-production-hardening)
+10. [Troubleshooting](#10-troubleshooting)
 
 ---
 
@@ -431,9 +432,95 @@ curl -X POST http://localhost:8000/api/publish/wordpress \
 
 ---
 
-## 8. Production Hardening
+## 8. VPS / Cloud Deployment (Lightsail, EC2, etc.)
 
-### 8.1 Reverse Proxy (nginx)
+### 8.1 Open Firewall Ports
+
+**AWS Lightsail:** Console → your instance → **Networking** tab → **IPv4 firewall rules**
+
+| Port | Purpose | When needed |
+| ---- | ------- | ----------- |
+| 8000 | API (direct, no nginx) | Dev / simple setup |
+| 5173 | Frontend dev server | Dev only |
+| 80 | HTTP (nginx) | Production |
+| 443 | HTTPS (nginx) | Production (recommended) |
+
+For any other cloud provider, open the same ports in the security group or firewall console.
+
+### 8.2 Backend: Bind to All Interfaces
+
+By default `API_HOST=127.0.0.1` — the API is only reachable from localhost. On a VPS you must bind to all interfaces.
+
+Set in `.env`:
+
+```bash
+API_HOST=0.0.0.0
+API_PORT=8000
+```
+
+Or pass it explicitly on the command line (overrides `.env`):
+
+```bash
+uvicorn api.main:app --host 0.0.0.0 --port 8000 --workers 2
+```
+
+> If using nginx as a reverse proxy, keep `API_HOST=127.0.0.1` and only expose 80/443 publicly.
+
+### 8.3 Frontend: Dev Server vs Production Build
+
+#### Dev server on a VPS
+
+The Vite dev server binds to `0.0.0.0` by default (after the fix in this repo), so port 5173 will be reachable once opened in the firewall.
+
+Create `frontend/.env.local`:
+
+```bash
+VITE_BACKEND_URL=http://localhost:8000   # where Vite proxies /api requests
+```
+
+Then run:
+
+```bash
+cd frontend && npm run dev
+# accessible at http://<vps-ip>:5173
+```
+
+#### Production build
+
+The built static files make API calls relative to their own origin by default. If the frontend and API are served from **different origins**, set `VITE_API_URL` before building:
+
+```bash
+# frontend/.env.local  (not committed to git)
+VITE_API_URL=http://<vps-ip>:8000
+```
+
+Build and serve:
+
+```bash
+cd frontend
+npm run build          # outputs to frontend/dist/
+# serve dist/ with nginx or any static file server
+```
+
+With nginx serving both frontend and API on the same domain (port 80/443), `VITE_API_URL` can stay empty — same-origin routing handles it automatically.
+
+### 8.4 CORS
+
+`CORS_ORIGINS` in `.env` must include the URL your browser loads the frontend from:
+
+```bash
+# Direct VPS access (no domain)
+CORS_ORIGINS=http://<vps-ip>:5173,http://<vps-ip>:8000
+
+# With a domain behind nginx
+CORS_ORIGINS=https://your-domain.com
+```
+
+---
+
+## 9. Production Hardening
+
+### 9.1 Reverse Proxy (nginx)
 
 ```nginx
 server {
@@ -501,7 +588,7 @@ RATE_LIMIT_PER_MINUTE=60
 
 ---
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 ### LLM / API issues
 
