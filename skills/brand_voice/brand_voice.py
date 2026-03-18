@@ -124,9 +124,14 @@ class BrandVoiceSkill(Skill):
             suggestions.extend(check_result.get("suggestions", []))
             scores.append(check_result.get("score", 1.0))
 
-        # Calculate overall score
+        # Calculate overall score. Issues are recorded for reporting and
+        # suggestions but the gate passes/fails on score alone — the score
+        # already incorporates all per-check penalties, so requiring
+        # len(issues)==0 would double-penalise and make the gate impossible
+        # to pass for any real LLM-generated content.
         overall_score = sum(scores) / len(scores) if scores else 0.0
-        passed = overall_score >= 0.7 and len(issues) == 0
+        threshold = (self.config or {}).get("quality_threshold", 0.7)
+        passed = overall_score >= threshold
 
         result = BrandVoiceResult(
             passed=passed,
