@@ -135,6 +135,27 @@ class WorkflowExecutor:
         self.logger.warning("No LLM provider configured — using mock CreationAgent")
         return CreationAgent(self.config.get("creation"))
 
+    def _run_async(self, coro) -> None:
+        """
+        Run an async coroutine from synchronous code.
+
+        Uses asyncio.run() when there is no running event loop (the normal
+        case when called via run_in_executor from workflow_service). Falls
+        back to a dedicated thread when called directly from an async context
+        (e.g. async tests or scripts), which would otherwise raise
+        'asyncio.run() cannot be called from a running event loop'.
+        """
+        try:
+            asyncio.get_running_loop()
+            # There is already a running loop in this thread — spin up a
+            # fresh thread that has no event loop so asyncio.run() works.
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                pool.submit(asyncio.run, coro).result()
+        except RuntimeError:
+            # No running loop — safe to call asyncio.run() directly.
+            asyncio.run(coro)
+
     def execute(self, request: WorkflowRequest) -> WorkflowExecutionResult:
         """
         Execute a workflow from start to finish.
@@ -160,9 +181,7 @@ class WorkflowExecutor:
             if workflow_type == WorkflowType.ARTICLE_PRODUCTION:
                 self._execute_article_workflow(request, execution_plan, result)
             elif workflow_type == WorkflowType.MULTI_PLATFORM_CAMPAIGN:
-                # Already running inside run_in_executor (no event loop in this
-                # thread), so asyncio.run() is safe here.
-                asyncio.run(self._execute_multi_platform_workflow_async(request, execution_plan, result))  # noqa: ASYNC110
+                self._run_async(self._execute_multi_platform_workflow_async(request, execution_plan, result))
             elif workflow_type == WorkflowType.SOCIAL_ONLY:
                 self._execute_social_workflow(request, execution_plan, result)
             elif workflow_type == WorkflowType.EMAIL_SEQUENCE:
@@ -365,6 +384,10 @@ class WorkflowExecutor:
         try:
             input_data = {"topic": topic}
             if source_urls:
+                if not isinstance(source_urls, list):
+                    source_urls = [str(source_urls)]
+                else:
+                    source_urls = [str(u) for u in source_urls]
                 input_data["source_urls"] = source_urls
             research_brief = self.research_agent.process(input_data)
 

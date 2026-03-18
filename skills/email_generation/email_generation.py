@@ -282,10 +282,11 @@ class EmailGenerationSkill(Skill):
         in_body = False
 
         for line in raw.strip().split('\n'):
-            if line.upper().startswith("SUBJECT:"):
-                subject = line[8:].strip().lstrip(':').strip()
-            elif line.upper().startswith("PREVIEW:"):
-                preview = line[8:].strip().lstrip(':').strip()
+            upper = line.upper()
+            if upper.startswith("SUBJECT:"):
+                subject = line.split(":", 1)[1].strip()
+            elif upper.startswith("PREVIEW:"):
+                preview = line.split(":", 1)[1].strip()
             elif line.strip().upper() == "BODY:":
                 in_body = True
             elif in_body:
