@@ -102,6 +102,7 @@ class WorkflowService:
             jobs[job_id]["current_step"] = "Converting request"
             jobs[job_id]["progress"] = 10
             self._add_step_progress(jobs[job_id], "initialization", "started")
+            jobs.save(job_id)
 
             # Get executor with brand template
             executor = self._get_executor(request.brand_template)
@@ -112,6 +113,7 @@ class WorkflowService:
             jobs[job_id]["current_step"] = "Executing workflow"
             jobs[job_id]["progress"] = 20
             self._add_step_progress(jobs[job_id], "conversion", "completed")
+            jobs.save(job_id)
 
             # Execute workflow in a thread pool so that the sync executor's
             # internal asyncio.run() calls don't collide with FastAPI's event loop.
@@ -129,6 +131,7 @@ class WorkflowService:
                     "completed" if step["success"] else "failed",
                     step.get("error"),
                 )
+            jobs.save(job_id)
 
             # Process result
             if result.success:

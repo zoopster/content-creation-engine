@@ -187,7 +187,10 @@ class SQLiteJobStore:
             try:
                 self._cache[row["job_id"]] = self._deserialize(dict(row))
             except Exception as exc:
-                logger.warning(f"Skipping corrupt job record {row['job_id']}: {exc}")
+                logger.warning(
+                    f"Skipping corrupt job record {row['job_id']}: {exc}",
+                    exc_info=True,
+                )
 
     def _deserialize(self, row: dict) -> dict:
         job = dict(row)

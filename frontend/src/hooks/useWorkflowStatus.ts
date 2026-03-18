@@ -14,6 +14,8 @@ interface UseWorkflowStatusReturn {
   stopPolling: () => void;
 }
 
+const MAX_CONSECUTIVE_FAILURES = 5;
+
 export const useWorkflowStatus = (
   pollInterval: number = 2000
 ): UseWorkflowStatusReturn => {
@@ -21,6 +23,7 @@ export const useWorkflowStatus = (
   const [error, setError] = useState<string | null>(null);
   const jobIdRef = useRef<string | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const consecutiveFailuresRef = useRef<number>(0);
 
   const { setJobStatus, setJobResult, setExecutionError } = useWizardStore();
 
@@ -29,6 +32,7 @@ export const useWorkflowStatus = (
       const response = await getWorkflowStatus(id);
       setJobStatus(response);
       setError(null);
+      consecutiveFailuresRef.current = 0;
 
       // Stop polling if workflow is complete
       if (
@@ -54,9 +58,20 @@ export const useWorkflowStatus = (
         }
       }
     } catch (err) {
+      consecutiveFailuresRef.current += 1;
       const message = err instanceof Error ? err.message : 'Failed to fetch status';
-      setError(message);
-      setExecutionError(message);
+      console.warn(`Poll attempt failed (${consecutiveFailuresRef.current}/${MAX_CONSECUTIVE_FAILURES}):`, message);
+
+      // Only surface the error after multiple consecutive failures
+      if (consecutiveFailuresRef.current >= MAX_CONSECUTIVE_FAILURES) {
+        setError(message);
+        setExecutionError(message);
+        setIsPolling(false);
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+      }
     }
   }, [setJobStatus, setJobResult, setExecutionError]);
 
@@ -65,6 +80,7 @@ export const useWorkflowStatus = (
       jobIdRef.current = id;
       setIsPolling(true);
       setError(null);
+      consecutiveFailuresRef.current = 0;
 
       // Immediate first fetch
       fetchStatus(id);
