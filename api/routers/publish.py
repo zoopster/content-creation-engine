@@ -142,7 +142,7 @@ async def verify_wordpress_connection(
     app_password: Optional[str] = None,
 ):
     """
-    Verify WordPress credentials and REST API connectivity.
+    Verify WordPress MCP Adapter connectivity and list available tools.
 
     Query params override env vars for quick ad-hoc testing.
     """
@@ -160,8 +160,7 @@ async def verify_wordpress_connection(
         "connected": True,
         "site_url": info.site_url,
         "site_name": info.site_name,
-        "user_id": info.user_id,
-        "username": info.username,
+        "available_tools": info.available_tools,
     }
 
 

@@ -1,50 +1,66 @@
 """
-WordPress Publish Skill - Publishes content to WordPress via REST API.
+WordPress Publish Skill — communicates with WordPress via the MCP Adapter.
 
-Uses WordPress Application Password authentication (WordPress 5.6+).
+Requires on the WordPress site:
+  - MCP Adapter plugin: https://github.com/WordPress/mcp-adapter
+  - WordPress abilities registered for post/category/tag management
+    (see "Expected tool names" below)
 
-To create an Application Password:
-    WordPress Admin → Users → Profile → scroll to "Application Passwords"
-    Enter a name, click "Add New Application Password", copy the generated password.
+Requires in the Python environment:
+  - pip install mcp
 
-Environment variables:
-    WORDPRESS_URL          WordPress site URL (e.g. https://example.com)
-    WORDPRESS_USERNAME     WordPress username
-    WORDPRESS_APP_PASSWORD Application password (spaces are stripped automatically)
+Transport:  Streamable HTTP (MCP 2025-06-18 spec)
+Endpoint:   {wp_url}/wp-json/mcp/mcp-adapter-default-server
+Auth:       WordPress Application Password via HTTP Basic Auth header
+
+Expected MCP tool names (checked in priority order; first match wins):
+  Post creation:    create-post | wp/create-post | wordpress/create-post
+  Category list:    list-categories | get-categories | wp/get-categories
+  Category create:  create-category | wp/create-category
+  Tag list:         list-tags | get-tags | wp/get-tags
+  Tag create:       create-tag | wp/create-tag
+  Site info:        get-site-info | site-info | wordpress/site-info
+
+If your WordPress site uses different names, pass a `tool_names` override dict
+to the constructor:
+  skill = WordPressPublishSkill(
+      wp_url="https://example.com",
+      username="admin",
+      app_password="xxxx xxxx xxxx xxxx xxxx xxxx",
+      tool_names={"create_post": "my-plugin/publish-article"},
+  )
 """
 
+import base64
+import json
 import logging
 import re
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-import httpx
-
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Default tool-name candidates (first match on the live server wins)
+# ---------------------------------------------------------------------------
 
-# ------------------------------------------------------------------
-# Inline helpers
-# ------------------------------------------------------------------
-
-def _inline_md(text: str) -> str:
-    """Convert inline markdown to HTML (bold, italic, code, links)."""
-    text = re.sub(r"\*\*\*(.+?)\*\*\*", r"<strong><em>\1</em></strong>", text)
-    text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
-    text = re.sub(r"\*(.+?)\*", r"<em>\1</em>", text)
-    text = re.sub(r"`(.+?)`", r"<code>\1</code>", text)
-    text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2">\1</a>', text)
-    return text
+_DEFAULT_TOOL_CANDIDATES: Dict[str, List[str]] = {
+    "create_post":       ["create-post", "wp/create-post", "wordpress/create-post", "posts/create"],
+    "list_categories":   ["list-categories", "get-categories", "wp/get-categories", "wordpress/list-categories"],
+    "create_category":   ["create-category", "wp/create-category", "wordpress/create-category"],
+    "list_tags":         ["list-tags", "get-tags", "wp/get-tags", "wordpress/list-tags"],
+    "create_tag":        ["create-tag", "wp/create-tag", "wordpress/create-tag"],
+    "site_info":         ["get-site-info", "site-info", "wordpress/site-info"],
+}
 
 
-def _escape_html(text: str) -> str:
-    """Escape HTML special characters."""
-    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-
+# ---------------------------------------------------------------------------
+# Result dataclasses
+# ---------------------------------------------------------------------------
 
 @dataclass
 class WordPressPublishResult:
-    """Result of a WordPress publish operation."""
     success: bool
     post_id: Optional[int] = None
     post_url: Optional[str] = None
@@ -55,25 +71,25 @@ class WordPressPublishResult:
 
 @dataclass
 class WordPressConnectionInfo:
-    """Result of a WordPress connection verification."""
     connected: bool
     site_url: Optional[str] = None
     site_name: Optional[str] = None
     user_id: Optional[int] = None
     username: Optional[str] = None
+    available_tools: List[str] = field(default_factory=list)
     error: Optional[str] = None
 
 
+# ---------------------------------------------------------------------------
+# Skill
+# ---------------------------------------------------------------------------
+
 class WordPressPublishSkill:
     """
-    Publishes content to WordPress using the REST API.
+    Publishes content to WordPress via the MCP Adapter plugin.
 
-    Supports:
-    - Publishing as draft or live post
-    - Markdown-to-HTML conversion
-    - Category and tag resolution by name (creates if missing)
-    - Featured image assignment by attachment ID
-    - Connection verification
+    Each public method opens exactly one MCP session so the connection
+    overhead is paid once per logical operation.
     """
 
     def __init__(
@@ -82,21 +98,89 @@ class WordPressPublishSkill:
         username: str,
         app_password: str,
         timeout: int = 30,
-    ):
-        """
-        Initialize the WordPress publish skill.
-
-        Args:
-            wp_url: WordPress site URL (e.g. https://example.com)
-            username: WordPress username
-            app_password: Application password (spaces stripped automatically)
-            timeout: HTTP request timeout in seconds
-        """
+        tool_names: Optional[Dict[str, str]] = None,
+    ) -> None:
         self.wp_url = wp_url.rstrip("/")
         self.username = username
         self.app_password = app_password.replace(" ", "")
         self.timeout = timeout
-        self._base_url = f"{self.wp_url}/wp-json/wp/v2"
+
+        self._mcp_url = f"{self.wp_url}/wp-json/mcp/mcp-adapter-default-server"
+
+        # Build Basic-Auth header once
+        creds = base64.b64encode(
+            f"{self.username}:{self.app_password}".encode()
+        ).decode()
+        self._auth_headers = {"Authorization": f"Basic {creds}"}
+
+        # Merge any caller-supplied name overrides into the candidates lists
+        self._candidates: Dict[str, List[str]] = {
+            k: list(v) for k, v in _DEFAULT_TOOL_CANDIDATES.items()
+        }
+        if tool_names:
+            for op, name in tool_names.items():
+                self._candidates.setdefault(op, []).insert(0, name)
+
+        # Cached tool list (populated on first connection)
+        self._tool_cache: Optional[List[str]] = None
+
+    # ------------------------------------------------------------------
+    # MCP session context manager
+    # ------------------------------------------------------------------
+
+    @asynccontextmanager
+    async def _session(self):
+        """Open a Streamable-HTTP MCP session and yield it initialised."""
+        try:
+            from mcp import ClientSession
+            from mcp.client.streamable_http import streamablehttp_client
+        except ImportError as exc:
+            raise RuntimeError(
+                "The 'mcp' package is required for WordPress MCP publishing. "
+                "Install it with: pip install mcp"
+            ) from exc
+
+        async with streamablehttp_client(
+            url=self._mcp_url,
+            headers=self._auth_headers,
+        ) as (read, write, _):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                yield session
+
+    # ------------------------------------------------------------------
+    # Tool discovery helpers
+    # ------------------------------------------------------------------
+
+    async def _get_tool_names(self, session) -> List[str]:
+        """Return cached list of tool names available on the server."""
+        if self._tool_cache is None:
+            response = await session.list_tools()
+            self._tool_cache = [t.name for t in response.tools]
+            logger.debug(f"WordPress MCP tools discovered: {self._tool_cache}")
+        return self._tool_cache
+
+    async def _find_tool(self, session, operation: str) -> Optional[str]:
+        """Return the first candidate name that exists on the server, or None."""
+        available = await self._get_tool_names(session)
+        for candidate in self._candidates.get(operation, []):
+            if candidate in available:
+                return candidate
+        return None
+
+    async def _require_tool(self, session, operation: str) -> str:
+        """Like _find_tool but raises ValueError with a helpful message if missing."""
+        tool = await self._find_tool(session, operation)
+        if tool:
+            return tool
+        available = await self._get_tool_names(session)
+        candidates = self._candidates.get(operation, [])
+        raise ValueError(
+            f"No MCP tool found for '{operation}'. "
+            f"Looked for: {candidates}. "
+            f"Available tools on {self._mcp_url}: {available}. "
+            "Register a matching WordPress ability or pass a 'tool_names' override."
+        )
 
     # ------------------------------------------------------------------
     # Core publish
@@ -114,217 +198,190 @@ class WordPressPublishSkill:
         featured_media: Optional[int] = None,
         meta: Optional[Dict[str, Any]] = None,
     ) -> WordPressPublishResult:
-        """
-        Create a post on WordPress.
-
-        Args:
-            title: Post title (plain text)
-            content: Post body (HTML)
-            status: "draft" | "publish" | "pending" | "private"
-            excerpt: Optional excerpt (plain text)
-            category_ids: List of category IDs
-            tag_ids: List of tag IDs
-            slug: URL slug (auto-generated by WordPress if omitted)
-            featured_media: Attachment ID for featured image
-            meta: Optional dict of post meta fields
-
-        Returns:
-            WordPressPublishResult
-        """
-        payload: Dict[str, Any] = {
-            "title": title,
-            "content": content,
-            "status": status,
-        }
-        if excerpt:
-            payload["excerpt"] = excerpt
-        if category_ids:
-            payload["categories"] = category_ids
-        if tag_ids:
-            payload["tags"] = tag_ids
-        if slug:
-            payload["slug"] = slug
-        if featured_media:
-            payload["featured_media"] = featured_media
-        if meta:
-            payload["meta"] = meta
-
+        """Create a post on WordPress via MCP."""
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(
-                    f"{self._base_url}/posts",
-                    auth=(self.username, self.app_password),
-                    json=payload,
-                )
+            async with self._session() as session:
+                tool = await self._require_tool(session, "create_post")
 
-            if response.status_code in (200, 201):
-                data = response.json()
-                post_id = data["id"]
+                args: Dict[str, Any] = {"title": title, "content": content, "status": status}
+                if excerpt:
+                    args["excerpt"] = excerpt
+                if category_ids:
+                    args["categories"] = category_ids
+                if tag_ids:
+                    args["tags"] = tag_ids
+                if slug:
+                    args["slug"] = slug
+                if featured_media:
+                    args["featured_media"] = featured_media
+                if meta:
+                    args["meta"] = meta
+
+                result = await session.call_tool(tool, args)
+                data = _parse_tool_result(result)
+
+                if isinstance(data, dict):
+                    post_id = data.get("id") or data.get("post_id")
+                    if post_id:
+                        return WordPressPublishResult(
+                            success=True,
+                            post_id=int(post_id),
+                            post_url=data.get("link") or data.get("post_url", ""),
+                            edit_url=f"{self.wp_url}/wp-admin/post.php?post={post_id}&action=edit",
+                            status=data.get("status", status),
+                        )
+
                 return WordPressPublishResult(
-                    success=True,
-                    post_id=post_id,
-                    post_url=data.get("link", ""),
-                    edit_url=f"{self.wp_url}/wp-admin/post.php?post={post_id}&action=edit",
-                    status=data.get("status", status),
+                    success=False,
+                    error=f"Unexpected response from MCP tool '{tool}': {data}",
                 )
 
-            error_detail = _extract_error(response)
-            logger.error(f"WordPress API {response.status_code}: {error_detail}")
-            return WordPressPublishResult(
-                success=False,
-                error=f"HTTP {response.status_code}: {error_detail}",
-            )
-
-        except httpx.TimeoutException:
-            return WordPressPublishResult(success=False, error="Request timed out")
-        except Exception as e:
-            logger.error(f"WordPress publish failed: {e}")
-            return WordPressPublishResult(success=False, error=str(e))
-
-    # ------------------------------------------------------------------
-    # Category / tag helpers
-    # ------------------------------------------------------------------
-
-    async def get_categories(self) -> List[Dict[str, Any]]:
-        """Fetch all categories (up to 100)."""
-        return await self._get_terms("categories")
-
-    async def get_tags(self) -> List[Dict[str, Any]]:
-        """Fetch all tags (up to 100)."""
-        return await self._get_terms("tags")
-
-    async def _get_terms(self, taxonomy: str) -> List[Dict[str, Any]]:
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.get(
-                    f"{self._base_url}/{taxonomy}",
-                    auth=(self.username, self.app_password),
-                    params={"per_page": 100},
-                )
-                response.raise_for_status()
-                return response.json()
-        except Exception as e:
-            logger.error(f"Failed to fetch {taxonomy}: {e}")
-            return []
-
-    async def resolve_category_names(self, names: List[str]) -> List[int]:
-        """
-        Resolve category names to IDs, creating any that don't exist.
-
-        Args:
-            names: List of category names
-
-        Returns:
-            List of category IDs
-        """
-        if not names:
-            return []
-        categories = await self.get_categories()
-        name_to_id = {c["name"].lower(): c["id"] for c in categories}
-        name_to_id.update({c["slug"]: c["id"] for c in categories})
-
-        ids = []
-        for name in names:
-            key = name.lower()
-            if key in name_to_id:
-                ids.append(name_to_id[key])
-            else:
-                cat_id = await self._create_term("categories", name)
-                if cat_id:
-                    ids.append(cat_id)
-        return ids
-
-    async def resolve_tag_names(self, names: List[str]) -> List[int]:
-        """
-        Resolve tag names to IDs, creating any that don't exist.
-
-        Args:
-            names: List of tag names
-
-        Returns:
-            List of tag IDs
-        """
-        if not names:
-            return []
-        tags = await self.get_tags()
-        name_to_id = {t["name"].lower(): t["id"] for t in tags}
-
-        ids = []
-        for name in names:
-            key = name.lower()
-            if key in name_to_id:
-                ids.append(name_to_id[key])
-            else:
-                tag_id = await self._create_term("tags", name)
-                if tag_id:
-                    ids.append(tag_id)
-        return ids
-
-    async def _create_term(self, taxonomy: str, name: str) -> Optional[int]:
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(
-                    f"{self._base_url}/{taxonomy}",
-                    auth=(self.username, self.app_password),
-                    json={"name": name},
-                )
-                if response.status_code in (200, 201):
-                    return response.json()["id"]
-                logger.warning(
-                    f"Could not create {taxonomy} '{name}': {_extract_error(response)}"
-                )
-        except Exception as e:
-            logger.error(f"Failed to create {taxonomy} '{name}': {e}")
-        return None
+        except ValueError as exc:
+            return WordPressPublishResult(success=False, error=str(exc))
+        except Exception as exc:
+            logger.error(f"WordPress MCP publish failed: {exc}")
+            return WordPressPublishResult(success=False, error=str(exc))
 
     # ------------------------------------------------------------------
     # Connection verification
     # ------------------------------------------------------------------
 
     async def verify_connection(self) -> WordPressConnectionInfo:
-        """
-        Verify WordPress credentials and REST API access.
-
-        Returns:
-            WordPressConnectionInfo with site and user details on success.
-        """
+        """Verify the MCP endpoint is reachable and return available tools."""
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                # Check user auth
-                user_resp = await client.get(
-                    f"{self._base_url}/users/me",
-                    auth=(self.username, self.app_password),
-                )
-                if user_resp.status_code != 200:
-                    return WordPressConnectionInfo(
-                        connected=False,
-                        error=f"Authentication failed: {_extract_error(user_resp)}",
-                    )
-                user = user_resp.json()
+            async with self._session() as session:
+                tools = await self._get_tool_names(session)
 
-                # Get site info
-                site_resp = await client.get(f"{self.wp_url}/wp-json/")
+                # Try to get site info if the tool exists
                 site_name = None
-                if site_resp.status_code == 200:
-                    site_name = site_resp.json().get("name")
+                site_tool = await self._find_tool(session, "site_info")
+                if site_tool:
+                    try:
+                        result = await session.call_tool(site_tool, {})
+                        data = _parse_tool_result(result)
+                        if isinstance(data, dict):
+                            site_name = data.get("name") or data.get("site_name")
+                    except Exception:
+                        pass
 
-            return WordPressConnectionInfo(
-                connected=True,
-                site_url=self.wp_url,
-                site_name=site_name,
-                user_id=user.get("id"),
-                username=user.get("name"),
-            )
-        except httpx.ConnectError:
-            return WordPressConnectionInfo(
-                connected=False,
-                error=f"Could not connect to {self.wp_url}",
-            )
-        except Exception as e:
-            return WordPressConnectionInfo(connected=False, error=str(e))
+                return WordPressConnectionInfo(
+                    connected=True,
+                    site_url=self.wp_url,
+                    site_name=site_name,
+                    available_tools=tools,
+                )
+        except Exception as exc:
+            return WordPressConnectionInfo(connected=False, error=str(exc))
 
     # ------------------------------------------------------------------
-    # Gutenberg block conversion
+    # Categories
+    # ------------------------------------------------------------------
+
+    async def get_categories(self) -> List[Dict[str, Any]]:
+        """Fetch all categories from WordPress via MCP."""
+        try:
+            async with self._session() as session:
+                return await self._get_categories(session)
+        except Exception as exc:
+            logger.error(f"get_categories failed: {exc}")
+            return []
+
+    async def _get_categories(self, session) -> List[Dict[str, Any]]:
+        tool = await self._find_tool(session, "list_categories")
+        if not tool:
+            logger.warning("No list-categories MCP tool found; returning []")
+            return []
+        result = await session.call_tool(tool, {})
+        data = _parse_tool_result(result)
+        return data if isinstance(data, list) else []
+
+    async def resolve_category_names(self, names: List[str]) -> List[int]:
+        """Resolve category names to IDs in a single MCP session, creating missing ones."""
+        if not names:
+            return []
+        try:
+            async with self._session() as session:
+                return await self._resolve_terms(session, names, "category")
+        except Exception as exc:
+            logger.error(f"resolve_category_names failed: {exc}")
+            return []
+
+    # ------------------------------------------------------------------
+    # Tags
+    # ------------------------------------------------------------------
+
+    async def get_tags(self) -> List[Dict[str, Any]]:
+        """Fetch all tags from WordPress via MCP."""
+        try:
+            async with self._session() as session:
+                return await self._get_tags(session)
+        except Exception as exc:
+            logger.error(f"get_tags failed: {exc}")
+            return []
+
+    async def _get_tags(self, session) -> List[Dict[str, Any]]:
+        tool = await self._find_tool(session, "list_tags")
+        if not tool:
+            logger.warning("No list-tags MCP tool found; returning []")
+            return []
+        result = await session.call_tool(tool, {})
+        data = _parse_tool_result(result)
+        return data if isinstance(data, list) else []
+
+    async def resolve_tag_names(self, names: List[str]) -> List[int]:
+        """Resolve tag names to IDs in a single MCP session, creating missing ones."""
+        if not names:
+            return []
+        try:
+            async with self._session() as session:
+                return await self._resolve_terms(session, names, "tag")
+        except Exception as exc:
+            logger.error(f"resolve_tag_names failed: {exc}")
+            return []
+
+    # ------------------------------------------------------------------
+    # Shared term resolution
+    # ------------------------------------------------------------------
+
+    async def _resolve_terms(self, session, names: List[str], term_type: str) -> List[int]:
+        """Resolve names → IDs within an existing session, creating missing terms."""
+        fetch_op = "list_categories" if term_type == "category" else "list_tags"
+        create_op = "create_category" if term_type == "category" else "create_tag"
+
+        # Fetch existing terms
+        fetch_tool = await self._find_tool(session, fetch_op)
+        existing: Dict[str, int] = {}
+        if fetch_tool:
+            result = await session.call_tool(fetch_tool, {})
+            terms = _parse_tool_result(result)
+            if isinstance(terms, list):
+                existing = {t["name"].lower(): t["id"] for t in terms if "name" in t and "id" in t}
+
+        ids: List[int] = []
+        create_tool = await self._find_tool(session, create_op)
+
+        for name in names:
+            key = name.lower()
+            if key in existing:
+                ids.append(existing[key])
+            elif create_tool:
+                try:
+                    result = await session.call_tool(create_tool, {"name": name})
+                    data = _parse_tool_result(result)
+                    if isinstance(data, dict) and "id" in data:
+                        ids.append(int(data["id"]))
+                        existing[key] = int(data["id"])
+                except Exception as exc:
+                    logger.warning(f"Could not create {term_type} '{name}': {exc}")
+            else:
+                logger.warning(
+                    f"No create-{term_type} MCP tool found; '{name}' will be skipped"
+                )
+
+        return ids
+
+    # ------------------------------------------------------------------
+    # Gutenberg block conversion (WordPress 5.0+ / 6.x block editor)
     # ------------------------------------------------------------------
 
     @staticmethod
@@ -332,13 +389,16 @@ class WordPressPublishSkill:
         """
         Convert Markdown to WordPress Gutenberg block markup (WP 5.0+).
 
-        Each structural element is wrapped in block comment delimiters
-        so the block editor recognises and renders them natively.
-        Inline markdown (bold, italic, code, links) is converted to HTML.
+        Each structural element is wrapped in block comment delimiters so
+        the block editor recognises and renders them natively, avoiding the
+        Classic block fallback used for plain HTML.
         """
         lines = content.split("\n")
-        blocks: list[str] = []
+        blocks: List[str] = []
         i = 0
+        _BLOCK_START = re.compile(
+            r"^(#{1,6}\s|[-*+]\s|\d+\.\s|```|>|[-*_]{3,}\s*$)"
+        )
 
         while i < len(lines):
             line = lines[i]
@@ -370,7 +430,7 @@ class WordPressPublishSkill:
             # Fenced code block
             if line.startswith("```"):
                 lang = line[3:].strip()
-                code_lines: list[str] = []
+                code_lines: List[str] = []
                 i += 1
                 while i < len(lines) and not lines[i].startswith("```"):
                     code_lines.append(lines[i])
@@ -387,31 +447,29 @@ class WordPressPublishSkill:
 
             # Blockquote
             if line.startswith("> "):
-                quote_lines: list[str] = []
+                quote_lines: List[str] = []
                 while i < len(lines) and lines[i].startswith("> "):
                     quote_lines.append(_inline_md(lines[i][2:]))
                     i += 1
-                inner = " ".join(quote_lines)
                 blocks.append(
                     '<!-- wp:quote -->\n'
-                    f'<blockquote class="wp-block-quote"><p>{inner}</p></blockquote>\n'
+                    f'<blockquote class="wp-block-quote"><p>{" ".join(quote_lines)}</p></blockquote>\n'
                     '<!-- /wp:quote -->'
                 )
                 continue
 
             # Unordered list
             if re.match(r"^[-*+]\s+", line):
-                items: list[str] = []
+                items: List[str] = []
                 while i < len(lines) and re.match(r"^[-*+]\s+", lines[i]):
                     text = _inline_md(re.sub(r"^[-*+]\s+", "", lines[i]))
                     items.append(
                         f'<!-- wp:list-item -->\n<li>{text}</li>\n<!-- /wp:list-item -->'
                     )
                     i += 1
-                inner = "\n".join(items)
                 blocks.append(
                     '<!-- wp:list -->\n'
-                    f'<ul class="wp-block-list">\n{inner}\n</ul>\n'
+                    f'<ul class="wp-block-list">\n' + "\n".join(items) + '\n</ul>\n'
                     '<!-- /wp:list -->'
                 )
                 continue
@@ -425,22 +483,20 @@ class WordPressPublishSkill:
                         f'<!-- wp:list-item -->\n<li>{text}</li>\n<!-- /wp:list-item -->'
                     )
                     i += 1
-                inner = "\n".join(items)
                 blocks.append(
                     '<!-- wp:list {"ordered":true} -->\n'
-                    f'<ol>\n{inner}\n</ol>\n'
+                    '<ol>\n' + "\n".join(items) + '\n</ol>\n'
                     '<!-- /wp:list -->'
                 )
                 continue
 
-            # Blank line — skip
+            # Blank line
             if not line.strip():
                 i += 1
                 continue
 
-            # Paragraph — collect until blank line or block-level marker
-            _BLOCK_START = re.compile(r"^(#{1,6}\s|[-*+]\s|\d+\.\s|```|>|[-*_]{3,}\s*$)")
-            para_lines: list[str] = []
+            # Paragraph
+            para_lines: List[str] = []
             while i < len(lines) and lines[i].strip() and not _BLOCK_START.match(lines[i]):
                 para_lines.append(lines[i])
                 i += 1
@@ -456,7 +512,7 @@ class WordPressPublishSkill:
 
     @staticmethod
     def markdown_to_html(content: str) -> str:
-        """Convert markdown to plain HTML (legacy; prefer markdown_to_blocks for WP 6+)."""
+        """Convert Markdown to plain HTML (legacy; prefer markdown_to_blocks for WP 6+)."""
         try:
             import markdown as md_lib
             return md_lib.markdown(content, extensions=["extra", "toc"])
@@ -482,14 +538,30 @@ class WordPressPublishSkill:
         return "\n\n".join(wrapped)
 
 
-# ------------------------------------------------------------------
-# Helpers
-# ------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Module-level helpers
+# ---------------------------------------------------------------------------
 
-def _extract_error(response: httpx.Response) -> str:
-    """Extract a readable error message from a WordPress API response."""
-    try:
-        data = response.json()
-        return data.get("message", response.text[:200])
-    except Exception:
-        return response.text[:200]
+def _inline_md(text: str) -> str:
+    """Convert inline Markdown (bold, italic, code, links) to HTML."""
+    text = re.sub(r"\*\*\*(.+?)\*\*\*", r"<strong><em>\1</em></strong>", text)
+    text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
+    text = re.sub(r"\*(.+?)\*", r"<em>\1</em>", text)
+    text = re.sub(r"`(.+?)`", r"<code>\1</code>", text)
+    text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2">\1</a>', text)
+    return text
+
+
+def _escape_html(text: str) -> str:
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _parse_tool_result(result) -> Any:
+    """Extract a Python object from an MCP CallToolResult content block."""
+    for block in result.content:
+        if hasattr(block, "text"):
+            try:
+                return json.loads(block.text)
+            except (json.JSONDecodeError, TypeError):
+                return block.text
+    return None
