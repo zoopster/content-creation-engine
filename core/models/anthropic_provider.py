@@ -164,8 +164,8 @@ class AnthropicProvider(ModelProvider):
         super().__init__(api_key=api_key, **kwargs)
 
         self.base_url = kwargs.get("base_url", "https://api.anthropic.com")
-        self.timeout = kwargs.get("timeout", 60)
-        self.max_retries = kwargs.get("max_retries", 2)
+        self.timeout = kwargs.get("timeout", 120)
+        self.max_retries = kwargs.get("max_retries", 5)
         self._client = None
 
     @property

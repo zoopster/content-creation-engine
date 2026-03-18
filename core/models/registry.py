@@ -25,8 +25,8 @@ class ProviderConfig:
     enabled: bool = True
     api_key: Optional[str] = None
     base_url: Optional[str] = None
-    timeout: int = 60
-    max_retries: int = 2
+    timeout: int = 120
+    max_retries: int = 5
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -306,19 +306,29 @@ def create_default_registry() -> ModelRegistry:
     # Register Anthropic if API key available
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
     if anthropic_key:
+        anthropic_conf = ProviderConfig(api_key=anthropic_key)
         registry.register_provider(
             "anthropic",
-            AnthropicProvider(api_key=anthropic_key),
-            ProviderConfig(api_key=anthropic_key),
+            AnthropicProvider(
+                api_key=anthropic_key,
+                timeout=anthropic_conf.timeout,
+                max_retries=anthropic_conf.max_retries,
+            ),
+            anthropic_conf,
         )
 
     # Register OpenAI if API key available
     openai_key = os.environ.get("OPENAI_API_KEY")
     if openai_key:
+        openai_conf = ProviderConfig(api_key=openai_key)
         registry.register_provider(
             "openai",
-            OpenAIProvider(api_key=openai_key),
-            ProviderConfig(api_key=openai_key),
+            OpenAIProvider(
+                api_key=openai_key,
+                timeout=openai_conf.timeout,
+                max_retries=openai_conf.max_retries,
+            ),
+            openai_conf,
         )
 
     return registry
