@@ -81,7 +81,7 @@ class ModelRegistry:
     DEFAULT_CONFIGS = {
         "research": AgentModelConfig(
             provider="anthropic",
-            model="claude-opus-4-6",  # Opus for deep, accurate research
+            model="claude-opus-4-20250514",  # Opus for deep, accurate research
             config=GenerationConfig(
                 max_tokens=4096,
                 temperature=0.3,  # Lower temperature for factual research

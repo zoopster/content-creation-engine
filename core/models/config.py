@@ -34,7 +34,7 @@ DEFAULT_MODEL_CONFIG = {
     "agents": {
         "research": {
             "provider": "anthropic",
-            "model": "claude-opus-4-6",
+            "model": "claude-opus-4-20250514",
             "config": {
                 "max_tokens": 4096,
                 "temperature": 0.3,
