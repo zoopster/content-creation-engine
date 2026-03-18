@@ -155,12 +155,18 @@ class WorkflowService:
                             )
                         )
 
-                # Extract content preview
+                # Extract content preview and full content
                 content_preview = None
+                content_full = None
                 if "draft_content" in result.outputs:
                     draft = result.outputs["draft_content"]
                     if hasattr(draft, "content"):
-                        content_preview = draft.content[:500] + "..." if len(draft.content) > 500 else draft.content
+                        content_full = draft.content
+                        content_preview = (
+                            draft.content[:500] + "..."
+                            if len(draft.content) > 500
+                            else draft.content
+                        )
 
                 jobs[job_id]["result"] = WorkflowResultResponse(
                     job_id=job_id,
@@ -169,6 +175,7 @@ class WorkflowService:
                     success=True,
                     outputs=outputs,
                     content_preview=content_preview,
+                    content_full=content_full,
                     metadata={
                         "steps_completed": len(result.steps_completed),
                         "content_types": [ct.value for ct in workflow_request.content_types],

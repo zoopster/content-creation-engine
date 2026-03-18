@@ -117,6 +117,7 @@ export interface WorkflowResultResponse {
   success: boolean;
   outputs: OutputFileInfo[];
   content_preview?: string;
+  content_full?: string;
   metadata: Record<string, unknown>;
   start_time: string;
   end_time?: string;

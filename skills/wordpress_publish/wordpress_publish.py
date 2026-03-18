@@ -23,6 +23,25 @@ import httpx
 logger = logging.getLogger(__name__)
 
 
+# ------------------------------------------------------------------
+# Inline helpers
+# ------------------------------------------------------------------
+
+def _inline_md(text: str) -> str:
+    """Convert inline markdown to HTML (bold, italic, code, links)."""
+    text = re.sub(r"\*\*\*(.+?)\*\*\*", r"<strong><em>\1</em></strong>", text)
+    text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
+    text = re.sub(r"\*(.+?)\*", r"<em>\1</em>", text)
+    text = re.sub(r"`(.+?)`", r"<code>\1</code>", text)
+    text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2">\1</a>', text)
+    return text
+
+
+def _escape_html(text: str) -> str:
+    """Escape HTML special characters."""
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 @dataclass
 class WordPressPublishResult:
     """Result of a WordPress publish operation."""
@@ -305,27 +324,144 @@ class WordPressPublishSkill:
             return WordPressConnectionInfo(connected=False, error=str(e))
 
     # ------------------------------------------------------------------
-    # Markdown conversion
+    # Gutenberg block conversion
     # ------------------------------------------------------------------
 
     @staticmethod
-    def markdown_to_html(content: str) -> str:
+    def markdown_to_blocks(content: str) -> str:
         """
-        Convert markdown to HTML.
+        Convert Markdown to WordPress Gutenberg block markup (WP 5.0+).
 
-        Uses the `markdown` package if installed, otherwise falls back
-        to a basic regex-based conversion.
+        Each structural element is wrapped in block comment delimiters
+        so the block editor recognises and renders them natively.
+        Inline markdown (bold, italic, code, links) is converted to HTML.
         """
+        lines = content.split("\n")
+        blocks: list[str] = []
+        i = 0
+
+        while i < len(lines):
+            line = lines[i]
+
+            # Heading
+            m = re.match(r"^(#{1,6})\s+(.+)", line)
+            if m:
+                level = len(m.group(1))
+                text = _inline_md(m.group(2))
+                level_attr = "" if level == 2 else f' {{"level":{level}}}'
+                blocks.append(
+                    f'<!-- wp:heading{level_attr} -->\n'
+                    f'<h{level} class="wp-block-heading">{text}</h{level}>\n'
+                    f'<!-- /wp:heading -->'
+                )
+                i += 1
+                continue
+
+            # Horizontal rule
+            if re.match(r"^[-*_]{3,}\s*$", line):
+                blocks.append(
+                    '<!-- wp:separator -->\n'
+                    '<hr class="wp-block-separator has-alpha-channel-opacity"/>\n'
+                    '<!-- /wp:separator -->'
+                )
+                i += 1
+                continue
+
+            # Fenced code block
+            if line.startswith("```"):
+                lang = line[3:].strip()
+                code_lines: list[str] = []
+                i += 1
+                while i < len(lines) and not lines[i].startswith("```"):
+                    code_lines.append(lines[i])
+                    i += 1
+                code = _escape_html("\n".join(code_lines))
+                lang_attr = f' {{"language":"{lang}"}}' if lang else ""
+                blocks.append(
+                    f'<!-- wp:code{lang_attr} -->\n'
+                    f'<pre class="wp-block-code"><code>{code}</code></pre>\n'
+                    f'<!-- /wp:code -->'
+                )
+                i += 1  # skip closing ```
+                continue
+
+            # Blockquote
+            if line.startswith("> "):
+                quote_lines: list[str] = []
+                while i < len(lines) and lines[i].startswith("> "):
+                    quote_lines.append(_inline_md(lines[i][2:]))
+                    i += 1
+                inner = " ".join(quote_lines)
+                blocks.append(
+                    '<!-- wp:quote -->\n'
+                    f'<blockquote class="wp-block-quote"><p>{inner}</p></blockquote>\n'
+                    '<!-- /wp:quote -->'
+                )
+                continue
+
+            # Unordered list
+            if re.match(r"^[-*+]\s+", line):
+                items: list[str] = []
+                while i < len(lines) and re.match(r"^[-*+]\s+", lines[i]):
+                    text = _inline_md(re.sub(r"^[-*+]\s+", "", lines[i]))
+                    items.append(
+                        f'<!-- wp:list-item -->\n<li>{text}</li>\n<!-- /wp:list-item -->'
+                    )
+                    i += 1
+                inner = "\n".join(items)
+                blocks.append(
+                    '<!-- wp:list -->\n'
+                    f'<ul class="wp-block-list">\n{inner}\n</ul>\n'
+                    '<!-- /wp:list -->'
+                )
+                continue
+
+            # Ordered list
+            if re.match(r"^\d+\.\s+", line):
+                items = []
+                while i < len(lines) and re.match(r"^\d+\.\s+", lines[i]):
+                    text = _inline_md(re.sub(r"^\d+\.\s+", "", lines[i]))
+                    items.append(
+                        f'<!-- wp:list-item -->\n<li>{text}</li>\n<!-- /wp:list-item -->'
+                    )
+                    i += 1
+                inner = "\n".join(items)
+                blocks.append(
+                    '<!-- wp:list {"ordered":true} -->\n'
+                    f'<ol>\n{inner}\n</ol>\n'
+                    '<!-- /wp:list -->'
+                )
+                continue
+
+            # Blank line — skip
+            if not line.strip():
+                i += 1
+                continue
+
+            # Paragraph — collect until blank line or block-level marker
+            _BLOCK_START = re.compile(r"^(#{1,6}\s|[-*+]\s|\d+\.\s|```|>|[-*_]{3,}\s*$)")
+            para_lines: list[str] = []
+            while i < len(lines) and lines[i].strip() and not _BLOCK_START.match(lines[i]):
+                para_lines.append(lines[i])
+                i += 1
+            if para_lines:
+                text = _inline_md(" ".join(para_lines))
+                blocks.append(
+                    '<!-- wp:paragraph -->\n'
+                    f'<p>{text}</p>\n'
+                    '<!-- /wp:paragraph -->'
+                )
+
+        return "\n\n".join(blocks)
+
+    @staticmethod
+    def markdown_to_html(content: str) -> str:
+        """Convert markdown to plain HTML (legacy; prefer markdown_to_blocks for WP 6+)."""
         try:
             import markdown as md_lib
-            return md_lib.markdown(
-                content,
-                extensions=["extra", "toc"],
-            )
+            return md_lib.markdown(content, extensions=["extra", "toc"])
         except ImportError:
             pass
-
-        # Basic fallback
         html = content
         html = re.sub(r"^### (.+)$", r"<h3>\1</h3>", html, flags=re.MULTILINE)
         html = re.sub(r"^## (.+)$", r"<h2>\1</h2>", html, flags=re.MULTILINE)
@@ -333,7 +469,6 @@ class WordPressPublishSkill:
         html = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", html)
         html = re.sub(r"\*(.+?)\*", r"<em>\1</em>", html)
         html = re.sub(r"`(.+?)`", r"<code>\1</code>", html)
-        # Wrap non-tag paragraphs
         paragraphs = html.split("\n\n")
         wrapped = []
         for p in paragraphs:

@@ -22,8 +22,8 @@ export const WorkflowResult: React.FC = () => {
   const { jobResult, jobId, resetWizard } = useWizardStore();
 
   const [publishOpen, setPublishOpen] = useState(false);
-  const [title, setTitle] = useState(() => extractTitle(jobResult?.content_preview ?? ''));
-  const [content, setContent] = useState(jobResult?.content_preview ?? '');
+  const [title, setTitle] = useState(() => extractTitle(jobResult?.content_full ?? jobResult?.content_preview ?? ''));
+  const [content, setContent] = useState(jobResult?.content_full ?? jobResult?.content_preview ?? '');
   const [status, setStatus] = useState<'draft' | 'publish'>('draft');
   const [categories, setCategories] = useState('');
   const [tags, setTags] = useState('');
@@ -190,10 +190,7 @@ export const WorkflowResult: React.FC = () => {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Content{' '}
-                      <span className="font-normal text-gray-500">
-                        (paste full content from downloaded file, or use preview below)
-                      </span>
+                      Content
                     </label>
                     <textarea
                       value={content}

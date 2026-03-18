@@ -211,6 +211,10 @@ class WorkflowResultResponse(BaseModel):
         default=None,
         description="Preview of generated content (first 500 chars)"
     )
+    content_full: Optional[str] = Field(
+        default=None,
+        description="Full generated content (markdown)"
+    )
     metadata: Dict[str, Any] = Field(default_factory=dict)
     start_time: datetime
     end_time: Optional[datetime] = None

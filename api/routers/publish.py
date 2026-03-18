@@ -214,33 +214,43 @@ async def publish_to_wordpress(request: WordPressPublishRequest):
     """
     Publish content to WordPress.
 
-    - Converts Markdown to HTML if `content_format` is `'markdown'`
+    - Converts Markdown to Gutenberg block markup (WP 5.0+)
     - Resolves category/tag names to IDs (creates them if missing)
     - Returns post ID, URL, and edit link on success
     """
-    skill = _build_skill(request.credentials)
+    try:
+        skill = _build_skill(request.credentials)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"Failed to initialise WordPress skill: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
 
-    # Convert markdown if needed
+    # Convert markdown to Gutenberg blocks
     content = request.content
     if request.content_format == "markdown":
-        content = WordPressPublishSkill.markdown_to_html(content)
-        logger.debug("Converted markdown content to HTML")
+        content = WordPressPublishSkill.markdown_to_blocks(content)
+        logger.debug("Converted markdown to Gutenberg blocks")
 
-    # Resolve category and tag names to IDs
-    category_ids = await skill.resolve_category_names(request.category_names)
-    tag_ids = await skill.resolve_tag_names(request.tag_names)
+    try:
+        # Resolve category and tag names to IDs
+        category_ids = await skill.resolve_category_names(request.category_names)
+        tag_ids = await skill.resolve_tag_names(request.tag_names)
 
-    # Publish
-    result = await skill.publish(
-        title=request.title,
-        content=content,
-        status=request.status,
-        excerpt=request.excerpt,
-        category_ids=category_ids,
-        tag_ids=tag_ids,
-        slug=request.slug,
-        featured_media=request.featured_media,
-    )
+        # Publish
+        result = await skill.publish(
+            title=request.title,
+            content=content,
+            status=request.status,
+            excerpt=request.excerpt,
+            category_ids=category_ids,
+            tag_ids=tag_ids,
+            slug=request.slug,
+            featured_media=request.featured_media,
+        )
+    except Exception as exc:
+        logger.error(f"WordPress publish error: {exc}")
+        raise HTTPException(status_code=502, detail=str(exc))
 
     if not result.success:
         raise HTTPException(status_code=502, detail=result.error)
