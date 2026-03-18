@@ -2,7 +2,6 @@
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Request
 from fastapi.responses import FileResponse
-from typing import Dict
 import uuid
 from datetime import datetime
 import os
@@ -14,16 +13,17 @@ from api.schemas.workflow import (
     WorkflowJobStatus,
 )
 from api.services.workflow_service import WorkflowService
+from api.job_store import SQLiteJobStore
 
 router = APIRouter()
 
-# In-memory job store (use Redis in production)
-jobs: Dict[str, dict] = {}
-
 
 def get_workflow_service(request: Request) -> WorkflowService:
-    """Dependency to get workflow service."""
     return request.app.state.workflow_service
+
+
+def get_job_store(request: Request) -> SQLiteJobStore:
+    return request.app.state.job_store
 
 
 @router.post("/execute", response_model=WorkflowStatusResponse)
@@ -31,6 +31,7 @@ async def execute_workflow(
     request: WorkflowRequestSchema,
     background_tasks: BackgroundTasks,
     service: WorkflowService = Depends(get_workflow_service),
+    job_store: SQLiteJobStore = Depends(get_job_store),
 ):
     """
     Submit a workflow for execution.
@@ -40,8 +41,7 @@ async def execute_workflow(
     """
     job_id = str(uuid.uuid4())
 
-    # Initialize job status
-    jobs[job_id] = {
+    job_store.create_job(job_id, {
         "status": WorkflowJobStatus.PENDING,
         "progress": 0,
         "current_step": "Queued",
@@ -50,14 +50,13 @@ async def execute_workflow(
         "error": None,
         "files": [],
         "created_at": datetime.now(),
-    }
+    })
 
-    # Execute workflow in background
     background_tasks.add_task(
         service.execute_workflow_async,
         job_id,
         request,
-        jobs,
+        job_store,
     )
 
     return WorkflowStatusResponse(
@@ -69,12 +68,15 @@ async def execute_workflow(
 
 
 @router.get("/status/{job_id}", response_model=WorkflowStatusResponse)
-async def get_workflow_status(job_id: str):
+async def get_workflow_status(
+    job_id: str,
+    job_store: SQLiteJobStore = Depends(get_job_store),
+):
     """Get current status of a workflow job."""
-    if job_id not in jobs:
+    if job_id not in job_store:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    job = jobs[job_id]
+    job = job_store[job_id]
     return WorkflowStatusResponse(
         job_id=job_id,
         status=job["status"],
@@ -86,12 +88,15 @@ async def get_workflow_status(job_id: str):
 
 
 @router.get("/result/{job_id}", response_model=WorkflowResultResponse)
-async def get_workflow_result(job_id: str):
+async def get_workflow_result(
+    job_id: str,
+    job_store: SQLiteJobStore = Depends(get_job_store),
+):
     """Get final result of a completed workflow."""
-    if job_id not in jobs:
+    if job_id not in job_store:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    job = jobs[job_id]
+    job = job_store[job_id]
 
     if job["status"] not in [WorkflowJobStatus.COMPLETED, WorkflowJobStatus.FAILED]:
         raise HTTPException(
@@ -109,18 +114,19 @@ async def get_workflow_result(job_id: str):
 
 
 @router.get("/download/{job_id}/{file_id}")
-async def download_file(job_id: str, file_id: str):
+async def download_file(
+    job_id: str,
+    file_id: str,
+    job_store: SQLiteJobStore = Depends(get_job_store),
+):
     """Download a generated output file."""
-    if job_id not in jobs:
+    if job_id not in job_store:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    job = jobs[job_id]
+    job = job_store[job_id]
 
     if job["status"] != WorkflowJobStatus.COMPLETED:
-        raise HTTPException(
-            status_code=400,
-            detail="Workflow not completed",
-        )
+        raise HTTPException(status_code=400, detail="Workflow not completed")
 
     try:
         file_index = int(file_id)
@@ -132,7 +138,7 @@ async def download_file(job_id: str, file_id: str):
         raise HTTPException(status_code=404, detail="File not found")
 
     output = files[file_index]
-    file_path = output.file_path
+    file_path = output.file_path if hasattr(output, "file_path") else output["file_path"]
 
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found on disk")
@@ -145,16 +151,6 @@ async def download_file(job_id: str, file_id: str):
 
 
 @router.get("/jobs")
-async def list_jobs():
-    """List all workflow jobs (for debugging)."""
-    return {
-        "jobs": [
-            {
-                "job_id": job_id,
-                "status": job["status"].value,
-                "progress": job["progress"],
-                "created_at": job["created_at"].isoformat(),
-            }
-            for job_id, job in jobs.items()
-        ]
-    }
+async def list_jobs(job_store: SQLiteJobStore = Depends(get_job_store)):
+    """List all workflow jobs."""
+    return {"jobs": job_store.list_jobs()}

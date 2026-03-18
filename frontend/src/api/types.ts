@@ -170,6 +170,32 @@ export interface ContentTypeListResponse {
   content_types: ContentTypeMetadata[];
 }
 
+// WordPress publish types
+export interface WordPressCredentials {
+  wp_url?: string;
+  username?: string;
+  app_password?: string;
+}
+
+export interface WordPressPublishRequest {
+  title: string;
+  content: string;
+  content_format: 'html' | 'markdown';
+  excerpt?: string;
+  status: 'draft' | 'publish' | 'pending' | 'private';
+  category_names: string[];
+  tag_names: string[];
+  credentials?: WordPressCredentials;
+}
+
+export interface WordPressPublishResponse {
+  success: boolean;
+  post_id: number;
+  post_url: string;
+  edit_url: string;
+  status: string;
+}
+
 // Platform metadata
 export interface PlatformSpec {
   id: string;

@@ -1,6 +1,6 @@
 """Workflow service - bridges API to existing WorkflowExecutor."""
 
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional, TYPE_CHECKING
 from datetime import datetime
 import asyncio
 import logging
@@ -17,6 +17,9 @@ from api.schemas.workflow import (
     OutputFileInfo,
 )
 from api.config import settings
+
+if TYPE_CHECKING:
+    from api.job_store import SQLiteJobStore
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +93,7 @@ class WorkflowService:
         self,
         job_id: str,
         request: WorkflowRequestSchema,
-        jobs: Dict[str, Any],
+        jobs: "SQLiteJobStore",
     ):
         """Execute workflow asynchronously and update job status."""
         try:
@@ -178,6 +181,8 @@ class WorkflowService:
                 if "production_outputs" in result.outputs:
                     jobs[job_id]["files"] = result.outputs["production_outputs"]
 
+                jobs.save(job_id)
+
             else:
                 jobs[job_id]["status"] = WorkflowJobStatus.FAILED
                 jobs[job_id]["error"] = "; ".join(result.errors)
@@ -190,6 +195,7 @@ class WorkflowService:
                     start_time=datetime.fromisoformat(result.start_time),
                     end_time=datetime.fromisoformat(result.end_time) if result.end_time else None,
                 )
+                jobs.save(job_id)
 
         except Exception as e:
             logger.error(f"Workflow execution failed: {str(e)}")
@@ -203,6 +209,7 @@ class WorkflowService:
                 errors=[str(e)],
                 start_time=datetime.now(),
             )
+            jobs.save(job_id)
 
     def _add_step_progress(
         self,

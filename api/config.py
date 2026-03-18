@@ -44,6 +44,10 @@ class Settings:
 
     # Job settings
     JOB_EXPIRY_HOURS: int = int(os.environ.get("JOB_EXPIRY_HOURS", "24"))
+    JOB_DB_PATH: str = os.environ.get(
+        "JOB_DB_PATH",
+        os.path.join(os.path.dirname(os.path.dirname(__file__)), "jobs.db"),
+    )
 
 
 settings = Settings()

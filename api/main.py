@@ -7,6 +7,7 @@ import logging
 
 from api.routers import workflow, templates, content_types, platforms, publish, repurpose
 from api.config import settings
+from api.job_store import SQLiteJobStore
 from api.services.workflow_service import WorkflowService
 
 logging.basicConfig(
@@ -20,8 +21,8 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
     logger.info("Starting Content Creation Engine API")
-    # Initialize workflow service on startup
     app.state.workflow_service = WorkflowService()
+    app.state.job_store = SQLiteJobStore(settings.JOB_DB_PATH)
     yield
     logger.info("Shutting down Content Creation Engine API")
 
