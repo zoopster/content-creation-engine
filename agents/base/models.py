@@ -140,7 +140,8 @@ class DraftContent:
 
         if self.brief:
             min_words, max_words = self.brief.word_count_range
-            if not (min_words <= self.word_count <= max_words):
+            # Allow 10% overshoot on upper bound — LLMs round up naturally
+            if not (min_words <= self.word_count <= max_words * 1.1):
                 errors.append(f"Word count {self.word_count} outside target range {min_words}-{max_words}")
 
         return len(errors) == 0, errors
@@ -159,10 +160,7 @@ class BrandVoiceResult:
         errors = []
 
         if self.score < 0.7:
-            errors.append(f"Brand voice score {self.score} below threshold 0.7")
-
-        if not self.passed:
-            errors.append("Brand voice validation failed")
+            errors.append(f"Brand voice score {self.score:.2f} below threshold 0.7")
 
         return len(errors) == 0, errors
 

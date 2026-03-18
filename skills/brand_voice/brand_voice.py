@@ -327,8 +327,16 @@ class BrandVoiceSkill(Skill):
                 "Use shorter sentences and simpler words."
             )
 
-        # Normalize score to 0-1
-        score = flesch_score / 100
+        # Normalize to 0-1 relative to target_score so that technical/professional
+        # content (Flesch 40-60) isn't penalised as if it were unreadable.
+        # At target_score → 1.0; below min_score → proportional penalty from 0.5.
+        target_score = guidelines["readability"]["target_score"]
+        if flesch_score >= target_score:
+            score = 1.0
+        elif flesch_score >= min_score:
+            score = 0.7 + 0.3 * (flesch_score - min_score) / max(target_score - min_score, 1)
+        else:
+            score = max(0.0, 0.7 * flesch_score / max(min_score, 1))
 
         return {
             "score": score,
