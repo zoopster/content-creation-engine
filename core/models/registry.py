@@ -81,7 +81,7 @@ class ModelRegistry:
     DEFAULT_CONFIGS = {
         "research": AgentModelConfig(
             provider="anthropic",
-            model="claude-3-5-haiku-20241022",  # Fast, cost-effective for research
+            model="claude-haiku-4-5-20251001",  # Fast, cost-effective for research
             config=GenerationConfig(
                 max_tokens=4096,
                 temperature=0.3,  # Lower temperature for factual research
@@ -105,7 +105,7 @@ class ModelRegistry:
         ),
         "social": AgentModelConfig(
             provider="anthropic",
-            model="claude-3-5-haiku-20241022",  # Fast for short-form content
+            model="claude-haiku-4-5-20251001",  # Fast for short-form content
             config=GenerationConfig(
                 max_tokens=1024,
                 temperature=0.8,  # Creative for engagement

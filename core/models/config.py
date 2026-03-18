@@ -34,7 +34,7 @@ DEFAULT_MODEL_CONFIG = {
     "agents": {
         "research": {
             "provider": "anthropic",
-            "model": "claude-3-5-haiku-20241022",
+            "model": "claude-haiku-4-5-20251001",
             "config": {
                 "max_tokens": 4096,
                 "temperature": 0.3,
@@ -59,7 +59,7 @@ DEFAULT_MODEL_CONFIG = {
         },
         "social": {
             "provider": "anthropic",
-            "model": "claude-3-5-haiku-20241022",
+            "model": "claude-haiku-4-5-20251001",
             "config": {
                 "max_tokens": 1024,
                 "temperature": 0.8,

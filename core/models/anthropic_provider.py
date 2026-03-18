@@ -73,9 +73,9 @@ ANTHROPIC_MODELS = [
         cost_per_1k_output=0.015,
     ),
     ModelInfo(
-        id="claude-3-5-haiku-20241022",
+        id="claude-haiku-4-5-20251001",
         provider="anthropic",
-        display_name="Claude 3.5 Haiku",
+        display_name="Claude Haiku 4.5",
         max_tokens=8192,
         context_window=200000,
         capabilities=[
@@ -129,10 +129,10 @@ MODEL_ALIASES = {
     "claude-opus": "claude-opus-4-20250514",
     "claude-opus-4": "claude-opus-4-20250514",
     "claude-3.5-sonnet": "claude-3-5-sonnet-20241022",
-    "claude-3.5-haiku": "claude-3-5-haiku-20241022",
+    "claude-3.5-haiku": "claude-haiku-4-5-20251001",
     "claude-3-opus": "claude-3-opus-20240229",
     "claude-3-haiku": "claude-3-haiku-20240307",
-    "claude-haiku": "claude-3-5-haiku-20241022",
+    "claude-haiku": "claude-haiku-4-5-20251001",
 }
 
 
