@@ -81,7 +81,7 @@ class ModelRegistry:
     DEFAULT_CONFIGS = {
         "research": AgentModelConfig(
             provider="anthropic",
-            model="claude-haiku-4-5-20251001",  # Fast, cost-effective for research
+            model="claude-opus-4-6",  # Opus for deep, accurate research
             config=GenerationConfig(
                 max_tokens=4096,
                 temperature=0.3,  # Lower temperature for factual research
@@ -89,7 +89,7 @@ class ModelRegistry:
         ),
         "creation": AgentModelConfig(
             provider="anthropic",
-            model="claude-sonnet-4-6",  # Balanced for creative writing
+            model="claude-sonnet-4-6",  # Sonnet for long-form writing
             config=GenerationConfig(
                 max_tokens=8192,
                 temperature=0.7,  # Higher temperature for creativity
@@ -105,10 +105,18 @@ class ModelRegistry:
         ),
         "social": AgentModelConfig(
             provider="anthropic",
-            model="claude-haiku-4-5-20251001",  # Fast for short-form content
+            model="claude-sonnet-4-6",  # Sonnet for social content writing
             config=GenerationConfig(
                 max_tokens=1024,
                 temperature=0.8,  # Creative for engagement
+            ),
+        ),
+        "email": AgentModelConfig(
+            provider="anthropic",
+            model="claude-haiku-4-5-20251001",  # Haiku for email/newsletter only
+            config=GenerationConfig(
+                max_tokens=2048,
+                temperature=0.7,
             ),
         ),
     }

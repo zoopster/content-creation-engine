@@ -34,7 +34,7 @@ DEFAULT_MODEL_CONFIG = {
     "agents": {
         "research": {
             "provider": "anthropic",
-            "model": "claude-haiku-4-5-20251001",
+            "model": "claude-opus-4-6",
             "config": {
                 "max_tokens": 4096,
                 "temperature": 0.3,
@@ -59,7 +59,7 @@ DEFAULT_MODEL_CONFIG = {
         },
         "social": {
             "provider": "anthropic",
-            "model": "claude-haiku-4-5-20251001",
+            "model": "claude-sonnet-4-6",
             "config": {
                 "max_tokens": 1024,
                 "temperature": 0.8,
@@ -80,6 +80,18 @@ DEFAULT_MODEL_CONFIG = {
                     "You are a professional editor. Review content for clarity, "
                     "grammar, style consistency, and brand voice alignment. "
                     "Provide specific, actionable suggestions."
+                ),
+            },
+        },
+        "email": {
+            "provider": "anthropic",
+            "model": "claude-haiku-4-5-20251001",
+            "config": {
+                "max_tokens": 2048,
+                "temperature": 0.7,
+                "system_prompt": (
+                    "You are an email and newsletter specialist. Write concise, "
+                    "engaging emails that get opened and drive action."
                 ),
             },
         },

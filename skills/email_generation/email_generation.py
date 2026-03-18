@@ -347,7 +347,7 @@ class EmailGenerationSkill(Skill):
         if self._model_config:
             return self._model_config
         try:
-            return self.registry.get_agent_config("creation")
+            return self.registry.get_agent_config("email")
         except Exception:
             return None
 
