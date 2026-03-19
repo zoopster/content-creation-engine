@@ -64,7 +64,7 @@ content-creation-engine/
 │   ├── pdf_generation/         # PDF output
 │   ├── content_repurpose/      # Format transformations
 │   ├── email_generation/       # Email content generation
-│   └── wordpress_publish/      # WordPress REST API publishing
+│   └── wordpress_publish/      # WordPress MCP Adapter publishing
 ├── api/                        # FastAPI REST API
 │   ├── main.py                 # App entry point
 │   ├── config.py               # Settings

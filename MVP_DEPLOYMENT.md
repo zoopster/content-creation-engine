@@ -562,10 +562,10 @@ CORS_ORIGINS=https://your-domain.com
 
 ### 8.3 Persistent Job Storage
 
-By default, workflow jobs are stored in memory and lost on restart. For persistence:
+Workflow jobs are persisted to SQLite via `SQLiteJobStore` (`api/job_store.py`). An in-memory cache provides fast reads while SQLite ensures state survives server restarts. Job state is flushed to SQLite at each workflow phase transition (not just on completion), so in-flight jobs are recoverable after a restart.
 
-- Replace the `jobs: Dict` in [api/routers/workflow.py](api/routers/workflow.py) with Redis (`redis-py`) or a lightweight SQLite store
-- The current in-memory store is fine for single-instance deployments where job loss on restart is acceptable
+- Configure the database path: `JOB_DB_PATH=./jobs.db` in `.env`
+- For multi-instance deployments, consider replacing `SQLiteJobStore` with a Redis-backed store
 
 ### 8.4 Rate Limiting
 

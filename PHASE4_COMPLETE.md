@@ -101,10 +101,14 @@ print(email.body)          # Full email body
 **Skill**: `skills/wordpress_publish/wordpress_publish.py`
 **Router**: `api/routers/publish.py`
 
-Publishes content to any WordPress site via the REST API using application passwords.
+Publishes content to any WordPress site via the MCP Adapter plugin using application passwords.
 
 **Features**:
-- Markdown → HTML conversion
+
+- Auto-detects MCP Adapter layered tooling (discover → get-info → execute meta-tools) and falls back to direct MCP tools
+- Discovers WordPress abilities via `mcp-adapter-discover-abilities`, executes via `mcp-adapter-execute-ability`
+- Suffix matching for plugin-prefixed ability names (e.g. `myplugin/create-post` matches candidate `create-post`)
+- Markdown → Gutenberg block markup conversion (WordPress 5.0+)
 - Category and tag name resolution (creates if missing)
 - Draft, publish, pending, private status support
 - Credential override in request body (falls back to env vars)
@@ -157,7 +161,7 @@ Replaces the module-level `jobs: Dict[str, dict]` with a write-through SQLite-ba
 
 **Architecture**:
 - **In-memory cache** (`Dict[str, dict]`) is the primary read/write surface — no SQLite overhead on every status poll
-- **SQLite** is written at job creation and on explicit `save(job_id)` calls (completion, failure, exception)
+- **SQLite** is written at job creation and on explicit `save(job_id)` calls (each phase transition, completion, failure, exception)
 - On server startup, `_load_from_db()` reloads all persisted jobs into the cache
 
 **Dict-like interface** keeps `WorkflowService` mutations unchanged:

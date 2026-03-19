@@ -11,7 +11,17 @@ Transport:  MCP Streamable HTTP (POST-only; does NOT use GET/SSE)
 Endpoint:   {wp_url}/wp-json/mcp/mcp-adapter-default-server
 Auth:       WordPress Application Password via HTTP Basic Auth header
 
-Expected MCP tool names (checked in priority order; first match wins):
+MCP Adapter layered tooling:
+  The adapter exposes 3 meta-tools (discover / get-info / execute) rather
+  than one MCP tool per WordPress ability.  This skill auto-detects the
+  adapter pattern: if ``mcp-adapter-execute-ability`` appears in the
+  ``tools/list`` response, it discovers abilities via
+  ``mcp-adapter-discover-abilities`` and routes all calls through
+  ``mcp-adapter-execute-ability``.  Servers that expose abilities directly
+  as individual MCP tools are still supported (direct mode).
+
+Expected ability / tool names (checked in priority order; first match wins;
+suffix match handles plugin prefixes like ``myplugin/create-post``):
   Post creation:    create-post | wp/create-post | wordpress/create-post
   Category list:    list-categories | get-categories | wp/get-categories
   Category create:  create-category | wp/create-category
@@ -51,6 +61,13 @@ _DEFAULT_TOOL_CANDIDATES: Dict[str, List[str]] = {
     "list_tags":        ["list-tags", "get-tags", "wp/get-tags", "wordpress/list-tags"],
     "create_tag":       ["create-tag", "wp/create-tag", "wordpress/create-tag"],
     "site_info":        ["get-site-info", "site-info", "wordpress/site-info"],
+}
+
+# MCP Adapter meta-tools (layered tooling pattern)
+_ADAPTER_TOOLS = {
+    "discover": "mcp-adapter-discover-abilities",
+    "info":     "mcp-adapter-get-ability-info",
+    "execute":  "mcp-adapter-execute-ability",
 }
 
 # MCP protocol version we advertise
@@ -268,6 +285,7 @@ class WordPressPublishSkill:
                 self._candidates.setdefault(op, []).insert(0, name)
 
         self._tool_cache: Optional[List[str]] = None
+        self._uses_adapter: bool = False
 
     # ------------------------------------------------------------------
     # Session context manager
@@ -283,17 +301,61 @@ class WordPressPublishSkill:
     # ------------------------------------------------------------------
 
     async def _get_tool_names(self, session: _MCPSession) -> List[str]:
-        if self._tool_cache is None:
-            tools = await session.list_tools()
-            self._tool_cache = [t["name"] for t in tools]
-            logger.debug(f"WordPress MCP tools: {self._tool_cache}")
+        """
+        Return the list of usable tool/ability names.
+
+        If the server exposes the MCP Adapter meta-tools, we switch to
+        adapter mode: discover abilities via ``mcp-adapter-discover-abilities``
+        and route all subsequent calls through ``mcp-adapter-execute-ability``.
+        """
+        if self._tool_cache is not None:
+            return self._tool_cache
+
+        tools = await session.list_tools()
+        raw_names = [t["name"] for t in tools]
+
+        if _ADAPTER_TOOLS["execute"] in raw_names:
+            self._uses_adapter = True
+            raw = await session.call_tool(_ADAPTER_TOOLS["discover"], {})
+            data = _parse_tool_content(raw)
+            if isinstance(data, dict) and "abilities" in data:
+                self._tool_cache = [a["name"] for a in data["abilities"]]
+            elif isinstance(data, list):
+                self._tool_cache = [a["name"] for a in data if "name" in a]
+            else:
+                self._tool_cache = []
+            logger.info(
+                "WordPress MCP Adapter detected — discovered %d abilities: %s",
+                len(self._tool_cache), self._tool_cache,
+            )
+        else:
+            self._uses_adapter = False
+            self._tool_cache = raw_names
+            logger.debug(f"WordPress MCP tools (direct): {self._tool_cache}")
+
         return self._tool_cache
 
     async def _find_tool(self, session: _MCPSession, operation: str) -> Optional[str]:
+        """Match an operation to an available tool/ability name.
+
+        Tries exact match first, then suffix match to handle adapter
+        abilities with plugin prefixes (e.g. ``wpmcp/create-post`` matches
+        candidate ``create-post``).
+        """
         available = await self._get_tool_names(session)
-        for candidate in self._candidates.get(operation, []):
+        candidates = self._candidates.get(operation, [])
+
+        # Exact match
+        for candidate in candidates:
             if candidate in available:
                 return candidate
+
+        # Suffix match for prefixed adapter abilities (e.g. "myplugin/create-post")
+        for candidate in candidates:
+            for name in available:
+                if name.endswith("/" + candidate) or name.endswith("-" + candidate):
+                    return name
+
         return None
 
     async def _require_tool(self, session: _MCPSession, operation: str) -> str:
@@ -302,12 +364,41 @@ class WordPressPublishSkill:
             return tool
         available = await self._get_tool_names(session)
         candidates = self._candidates.get(operation, [])
+        mode = "abilities (adapter)" if self._uses_adapter else "tools (direct)"
         raise ValueError(
             f"No MCP tool found for '{operation}'. "
             f"Looked for: {candidates}. "
-            f"Available on {self._mcp_url}: {available}. "
+            f"Available {mode} on {self._mcp_url}: {available}. "
             "Register a matching WordPress ability or pass a tool_names override."
         )
+
+    async def _call_tool(
+        self, session: _MCPSession, tool_name: str, arguments: Dict[str, Any]
+    ) -> Any:
+        """Execute a tool and return the parsed result.
+
+        In adapter mode the call is routed through
+        ``mcp-adapter-execute-ability`` and the ``{"success", "data"}``
+        envelope is unwrapped automatically.
+        """
+        if self._uses_adapter:
+            raw = await session.call_tool(
+                _ADAPTER_TOOLS["execute"],
+                {"ability_name": tool_name, "parameters": arguments},
+            )
+            data = _parse_tool_content(raw)
+            # Unwrap adapter envelope
+            if isinstance(data, dict):
+                if data.get("success") is False:
+                    raise RuntimeError(
+                        f"Ability '{tool_name}' failed: "
+                        f"{data.get('error', 'Unknown error')}"
+                    )
+                return data.get("data", data)
+            return data
+        else:
+            raw = await session.call_tool(tool_name, arguments)
+            return _parse_tool_content(raw)
 
     # ------------------------------------------------------------------
     # Core publish
@@ -343,8 +434,7 @@ class WordPressPublishSkill:
                 if meta:
                     args["meta"] = meta
 
-                raw = await session.call_tool(tool, args)
-                data = _parse_tool_content(raw)
+                data = await self._call_tool(session, tool, args)
 
                 if isinstance(data, dict):
                     post_id = data.get("id") or data.get("post_id")
@@ -381,8 +471,7 @@ class WordPressPublishSkill:
                 site_tool = await self._find_tool(session, "site_info")
                 if site_tool:
                     try:
-                        raw = await session.call_tool(site_tool, {})
-                        data = _parse_tool_content(raw)
+                        data = await self._call_tool(session, site_tool, {})
                         if isinstance(data, dict):
                             site_name = data.get("name") or data.get("site_name")
                     except Exception:
@@ -414,8 +503,7 @@ class WordPressPublishSkill:
         if not tool:
             logger.warning("No list-categories MCP tool found")
             return []
-        raw = await session.call_tool(tool, {})
-        data = _parse_tool_content(raw)
+        data = await self._call_tool(session, tool, {})
         return data if isinstance(data, list) else []
 
     async def resolve_category_names(self, names: List[str]) -> List[int]:
@@ -445,8 +533,7 @@ class WordPressPublishSkill:
         if not tool:
             logger.warning("No list-tags MCP tool found")
             return []
-        raw = await session.call_tool(tool, {})
-        data = _parse_tool_content(raw)
+        data = await self._call_tool(session, tool, {})
         return data if isinstance(data, list) else []
 
     async def resolve_tag_names(self, names: List[str]) -> List[int]:
@@ -472,8 +559,7 @@ class WordPressPublishSkill:
         fetch_tool = await self._find_tool(session, fetch_op)
         existing: Dict[str, int] = {}
         if fetch_tool:
-            raw = await session.call_tool(fetch_tool, {})
-            terms = _parse_tool_content(raw)
+            terms = await self._call_tool(session, fetch_tool, {})
             if isinstance(terms, list):
                 existing = {
                     t["name"].lower(): t["id"]
@@ -490,8 +576,7 @@ class WordPressPublishSkill:
                 ids.append(existing[key])
             elif create_tool:
                 try:
-                    raw = await session.call_tool(create_tool, {"name": name})
-                    data = _parse_tool_content(raw)
+                    data = await self._call_tool(session, create_tool, {"name": name})
                     if isinstance(data, dict) and "id" in data:
                         ids.append(int(data["id"]))
                         existing[key] = int(data["id"])
